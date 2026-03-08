@@ -1,4 +1,4 @@
-package com.ticketflow.api_gateway;
+package com.ticketflow.api-gateway;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
