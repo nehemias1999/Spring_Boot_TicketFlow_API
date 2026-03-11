@@ -20,11 +20,15 @@
           <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.38/lombok-1.18.38.jar" />
           <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok-mapstruct-binding/0.2.0/lombok-mapstruct-binding-0.2.0.jar" />
           <entry name="$MAVEN_REPOSITORY$/org/mapstruct/mapstruct-processor/1.6.3/mapstruct-processor-1.6.3.jar" />
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.38/lombok-1.18.38.jar" />
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok-mapstruct-binding/0.2.0/lombok-mapstruct-binding-0.2.0.jar" />
+          <entry name="$MAVEN_REPOSITORY$/org/mapstruct/mapstruct-processor/1.6.3/mapstruct-processor-1.6.3.jar" />
         </processorPath>
         <module name="event-service" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="event-service (1)" target="21" />
       <module name="ticketflow" target="17" />
     </bytecodeTargetLevel>
   </component>
@@ -34,6 +38,7 @@
       <module name="config-server" options="-parameters" />
       <module name="discovery-service" options="-parameters" />
       <module name="event-service" options="-parameters -Amapstruct.defaultComponentModel=spring" />
+      <module name="event-service (1)" options="-parameters -Amapstruct.defaultComponentModel=spring" />
     </option>
   </component>
 </project>

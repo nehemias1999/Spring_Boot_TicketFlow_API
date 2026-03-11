@@ -17,7 +17,7 @@ The project follows Hexagonal Architecture (Ports and Adapters) and Vertical Sli
 API Gateway: Entry point for all external requests. Handles routing, load balancing, security, and resilience.
 Config Server: Centralized configuration management for all services.
 Discovery Service (Eureka Server): Service registry for dynamic discovery of microservices.
-Event Service: Manages event catalog and ticketing logic.
+Event Service: Manages event event and ticketing logic.
 All services communicate over HTTP using REST APIs. Service discovery and configuration are managed centrally.
 
 Service Responsibilities
@@ -34,7 +34,7 @@ Registers all running microservices.
 Enables dynamic service lookup and load balancing.
 Event Service:
 Manages events, tickets, and related business logic.
-Exposes REST endpoints for event catalog operations.
+Exposes REST endpoints for event event operations.
 How to Run the Project
 Clone the repository:
 git clone <repository-url>

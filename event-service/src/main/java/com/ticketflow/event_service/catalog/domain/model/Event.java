@@ -10,11 +10,11 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * Core domain model representing an event catalog entry.
+ * Core domain model representing an event entry.
  * <p>
  * This is a pure domain object with no infrastructure dependencies.
  * It holds all business-relevant attributes for an event that can be
- * listed in the ticket reservation system's catalog.
+ * listed in the ticket reservation system's event.
  * </p>
  *
  * @author TicketFlow Team
@@ -24,10 +24,10 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Catalog {
+public class Event {
 
     /**
-     * Unique business identifier for the catalog entry (e.g., "EVT-001").
+     * Unique business identifier for the event entry (e.g., "EVT-001").
      * This ID is provided by the client and used across microservices.
      */
     private String id;
@@ -58,19 +58,20 @@ public class Catalog {
     private BigDecimal basePrice;
 
     /**
-     * Soft-delete flag. When {@code true}, the catalog entry is considered deleted.
+     * Soft-delete flag. When {@code true}, the event entry is considered deleted.
      */
     @Builder.Default
     private boolean deleted = false;
 
     /**
-     * Timestamp indicating when this catalog entry was created.
+     * Timestamp indicating when this event entry was created.
      */
     private LocalDateTime createdAt;
 
     /**
-     * Timestamp indicating when this catalog entry was last updated.
+     * Timestamp indicating when this event entry was last updated.
      */
     private LocalDateTime updatedAt;
+
 }
 

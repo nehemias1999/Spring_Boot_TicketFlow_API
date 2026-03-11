@@ -12,7 +12,7 @@
 	<artifactId>event-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>event-service</name>
-	<description>Event catalog microservice for a Ticket Reservation System. Built with Java 17, Spring Boot, Hexagonal Architecture, and Vertical Slicing.</description>
+	<description>Event event microservice for a Ticket Reservation System. Built with Java 17, Spring Boot, Hexagonal Architecture, and Vertical Slicing.</description>
 
 	<properties>
 		<java.version>21</java.version>

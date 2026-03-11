@@ -10,7 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * @author TicketFlow Team
  */
 @SpringBootTest
-class CatalogServiceApplicationTests {
+class EventServiceApplicationTests {
 
 	/**
 	 * Validates that the application context starts without errors,

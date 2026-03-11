@@ -9,25 +9,20 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 
 /**
- * Request DTO for creating a new catalog entry.
+ * Request DTO for updating an existing event entry.
  * <p>
- * All fields are validated using Jakarta Bean Validation constraints
- * to ensure data integrity before reaching the domain layer.
+ * Contains all mutable fields of an event. The ID cannot be changed
+ * and is provided as a path variable in the REST endpoint.
  * </p>
  *
- * @param id          unique business identifier (e.g., "EVT-001"), max 20 characters
- * @param title       name of the event (e.g., "Lollapalooza 2026"), between 3 and 150 characters
- * @param description short summary of the event, max 500 characters
- * @param date        date and time of the event as a string (e.g., "2026-10-15 20:00")
- * @param location    venue where the event takes place, max 200 characters
- * @param basePrice   base reference price for the event, must be >= 0 with up to 2 decimal places
+ * @param title       updated name of the event, between 3 and 150 characters
+ * @param description updated summary of the event, max 500 characters
+ * @param date        updated date and time string (e.g., "2026-10-15 20:00")
+ * @param location    updated venue, max 200 characters
+ * @param basePrice   updated base reference price, must be >= 0 with up to 2 decimal places
  * @author TicketFlow Team
  */
-public record CreateCatalogRequest(
-
-        @NotBlank(message = "ID is required")
-        @Size(max = 20, message = "ID must not exceed 20 characters")
-        String id,
+public record UpdateEventRequest(
 
         @NotBlank(message = "Title is required")
         @Size(min = 3, max = 150, message = "Title must be between 3 and 150 characters")

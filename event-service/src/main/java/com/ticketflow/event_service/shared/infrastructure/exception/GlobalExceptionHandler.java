@@ -1,7 +1,7 @@
 package com.ticketflow.event_service.shared.infrastructure.exception;
 
-import com.ticketflow.event_service.catalog.domain.exception.CatalogAlreadyExistsException;
-import com.ticketflow.event_service.catalog.domain.exception.CatalogNotFoundException;
+import com.ticketflow.event_service.catalog.domain.exception.EventAlreadyExistsException;
+import com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -28,15 +28,15 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     /**
-     * Handles {@link CatalogNotFoundException} when a requested catalog is not found.
+     * Handles {@link EventNotFoundException} when a requested catalog is not found.
      *
      * @param ex      the exception thrown
      * @param request the HTTP request that triggered the error
      * @return a 404 Not Found response with error details
      */
-    @ExceptionHandler(CatalogNotFoundException.class)
+    @ExceptionHandler(EventNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleCatalogNotFoundException(
-            CatalogNotFoundException ex, HttpServletRequest request) {
+            EventNotFoundException ex, HttpServletRequest request) {
         log.warn("Catalog not found on request to '{}': {}", request.getRequestURI(), ex.getMessage());
 
         ApiErrorResponse errorResponse = new ApiErrorResponse(
@@ -51,16 +51,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handles {@link CatalogAlreadyExistsException} when attempting to create
+     * Handles {@link EventAlreadyExistsException} when attempting to create
      * a catalog with a duplicate ID.
      *
      * @param ex      the exception thrown
      * @param request the HTTP request that triggered the error
      * @return a 409 Conflict response with error details
      */
-    @ExceptionHandler(CatalogAlreadyExistsException.class)
+    @ExceptionHandler(EventAlreadyExistsException.class)
     public ResponseEntity<ApiErrorResponse> handleCatalogAlreadyExistsException(
-            CatalogAlreadyExistsException ex, HttpServletRequest request) {
+            EventAlreadyExistsException ex, HttpServletRequest request) {
         log.warn("Catalog conflict on request to '{}': {}", request.getRequestURI(), ex.getMessage());
 
         ApiErrorResponse errorResponse = new ApiErrorResponse(

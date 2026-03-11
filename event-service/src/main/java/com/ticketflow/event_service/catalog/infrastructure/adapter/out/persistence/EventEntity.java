@@ -14,23 +14,23 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * JPA entity mapped to the {@code catalogs} table in the database.
+ * JPA entity mapped to the {@code events} table in the database.
  * <p>
  * This class is an infrastructure concern and should not leak into
  * the domain or application layers. Conversion to/from the domain
- * model is handled by {@link com.ticketflow.event_service.catalog.infrastructure.adapter.out.persistence.mapper.CatalogPersistenceMapper}.
+ * model is handled by {@link com.ticketflow.event_service.catalog.infrastructure.adapter.out.persistence.mapper.IEventPersistenceMapper}.
  * </p>
  *
  * @author TicketFlow Team
  */
 @Entity
-@Table(name = "catalogs")
+@Table(name = "events")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CatalogEntity {
+public class EventEntity {
 
     /**
      * Unique business identifier provided by the client (e.g., "EVT-001").

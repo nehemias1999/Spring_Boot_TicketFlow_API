@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
  * @param updatedAt   timestamp when the entry was last updated
  * @author TicketFlow Team
  */
-public record CatalogResponse(
+public record EventResponse(
         String id,
         String title,
         String description,
