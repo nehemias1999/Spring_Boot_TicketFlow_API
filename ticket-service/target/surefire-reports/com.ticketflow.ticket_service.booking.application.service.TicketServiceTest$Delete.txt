@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: com.ticketflow.ticket_service.booking.application.service.TicketServiceTest$Delete
--------------------------------------------------------------------------------
-Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.615 s -- in com.ticketflow.ticket_service.booking.application.service.TicketServiceTest$Delete

@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: com.ticketflow.ticket_service.shared.infrastructure.exception.GlobalExceptionHandlerTest$HandleTicketAlreadyExistsException
--------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.009 s -- in com.ticketflow.ticket_service.shared.infrastructure.exception.GlobalExceptionHandlerTest$HandleTicketAlreadyExistsException

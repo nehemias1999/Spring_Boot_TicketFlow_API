@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: com.ticketflow.ticket_service.booking.infrastructure.adapter.in.web.TicketControllerTest
--------------------------------------------------------------------------------
-Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 6.757 s -- in com.ticketflow.ticket_service.booking.infrastructure.adapter.in.web.TicketControllerTest
