@@ -11,8 +11,5 @@ public enum TicketStatus {
     CONFIRMED,
 
     /** The ticket has been cancelled and is no longer valid. */
-    CANCELLED,
-
-    /** The ticket is awaiting confirmation or payment processing. */
-    PENDING
+    CANCELLED
 }

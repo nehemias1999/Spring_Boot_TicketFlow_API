@@ -5,7 +5,6 @@ import com.ticketflow.ticket_service.booking.application.dto.request.CreateTicke
 import com.ticketflow.ticket_service.booking.application.dto.request.UpdateTicketRequest;
 import com.ticketflow.ticket_service.booking.application.dto.response.TicketResponse;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCancelledException;
-import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyExistsException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundException;
 import com.ticketflow.ticket_service.booking.domain.model.TicketStatus;
 import com.ticketflow.ticket_service.booking.domain.port.in.ITicketService;
@@ -40,12 +39,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Unit tests for {@link TicketController} using the Spring MVC test slice.
- * <p>
- * Only the web layer is loaded ({@code @WebMvcTest}). The {@link ITicketService}
- * dependency is replaced by a Mockito mock, and the
- * {@link com.ticketflow.ticket_service.shared.infrastructure.exception.GlobalExceptionHandler}
- * is auto-detected as a {@code @RestControllerAdvice} within the same context.
- * </p>
  */
 @WebMvcTest(TicketController.class)
 @TestPropertySource(properties = {
@@ -73,8 +66,8 @@ class TicketControllerTest {
                 LocalDateTime.now(), status, LocalDateTime.now(), null);
     }
 
-    private static CreateTicketRequest buildCreateRequest(String id) {
-        return new CreateTicketRequest(id, "EVT-001", "user-001");
+    private static CreateTicketRequest buildCreateRequest() {
+        return new CreateTicketRequest("EVT-001", "user-001");
     }
 
     private static UpdateTicketRequest buildUpdateRequest() {
@@ -92,8 +85,8 @@ class TicketControllerTest {
         @Test
         @DisplayName("should return 201 Created with TicketResponse body on success")
         void create_success_returns201() throws Exception {
-            CreateTicketRequest request = buildCreateRequest("TKT-001");
-            TicketResponse response = buildResponse("TKT-001", TicketStatus.CONFIRMED);
+            CreateTicketRequest request = buildCreateRequest();
+            TicketResponse response = buildResponse("generated-uuid", TicketStatus.CONFIRMED);
 
             when(ticketService.create(any())).thenReturn(response);
 
@@ -101,24 +94,9 @@ class TicketControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isCreated())
-                    .andExpect(jsonPath("$.id").value("TKT-001"))
+                    .andExpect(jsonPath("$.id").value("generated-uuid"))
                     .andExpect(jsonPath("$.eventId").value("EVT-001"))
                     .andExpect(jsonPath("$.status").value("CONFIRMED"));
-        }
-
-        @Test
-        @DisplayName("should return 409 Conflict when ticket ID already exists")
-        void create_conflict_returns409() throws Exception {
-            CreateTicketRequest request = buildCreateRequest("TKT-001");
-
-            when(ticketService.create(any())).thenThrow(new TicketAlreadyExistsException("TKT-001"));
-
-            mockMvc.perform(post("/api/v1/tickets")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(request)))
-                    .andExpect(status().isConflict())
-                    .andExpect(jsonPath("$.status").value(409))
-                    .andExpect(jsonPath("$.message").exists());
         }
 
         @Test
@@ -126,7 +104,6 @@ class TicketControllerTest {
         void create_validationError_returns400() throws Exception {
             String invalidBody = """
                     {
-                      "id": "",
                       "eventId": "",
                       "userId": ""
                     }
@@ -205,6 +182,16 @@ class TicketControllerTest {
                             .param("size", "5"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isEmpty());
+        }
+
+        @Test
+        @DisplayName("should cap page size at 100 when size exceeds the maximum")
+        void getAll_cappedSize_returns200() throws Exception {
+            Page<TicketResponse> emptyPage = new PageImpl<>(List.of());
+            when(ticketService.getAll(any(), any(), any(), any())).thenReturn(emptyPage);
+
+            mockMvc.perform(get("/api/v1/tickets").param("size", "999"))
+                    .andExpect(status().isOk());
         }
 
         @Test

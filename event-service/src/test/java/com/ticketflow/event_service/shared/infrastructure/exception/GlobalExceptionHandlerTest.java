@@ -1,6 +1,5 @@
 package com.ticketflow.event_service.shared.infrastructure.exception;
 
-import com.ticketflow.event_service.catalog.domain.exception.EventAlreadyExistsException;
 import com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,12 +23,6 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link GlobalExceptionHandler}.
- * <p>
- * The handler is instantiated directly and invoked with a mocked
- * {@link HttpServletRequest}, so no Spring context is required.
- * Each test verifies that the correct HTTP status, error fields,
- * and message are set on the returned {@link ApiErrorResponse}.
- * </p>
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GlobalExceptionHandler — unit tests")
@@ -40,9 +33,6 @@ class GlobalExceptionHandlerTest {
     @Mock
     private HttpServletRequest request;
 
-    /**
-     * Initialises the handler and stubs the request URI before each test.
-     */
     @BeforeEach
     void setUp() {
         handler = new GlobalExceptionHandler();
@@ -53,17 +43,10 @@ class GlobalExceptionHandlerTest {
     // handleCatalogNotFoundException — EventNotFoundException → 404
     // -------------------------------------------------------------------------
 
-    /**
-     * Tests for {@link GlobalExceptionHandler#handleCatalogNotFoundException(EventNotFoundException, HttpServletRequest)}.
-     */
     @Nested
     @DisplayName("handleCatalogNotFoundException() — EventNotFoundException")
     class HandleEventNotFoundException {
 
-        /**
-         * Verifies that a 404 response with the correct status, message, path,
-         * and non-null timestamp is returned when an event is not found.
-         */
         @Test
         @DisplayName("should return 404 with error details when EventNotFoundException is thrown")
         void handleEventNotFoundException_returns404() {
@@ -86,56 +69,13 @@ class GlobalExceptionHandlerTest {
     }
 
     // -------------------------------------------------------------------------
-    // handleCatalogAlreadyExistsException — EventAlreadyExistsException → 409
-    // -------------------------------------------------------------------------
-
-    /**
-     * Tests for {@link GlobalExceptionHandler#handleCatalogAlreadyExistsException(EventAlreadyExistsException, HttpServletRequest)}.
-     */
-    @Nested
-    @DisplayName("handleCatalogAlreadyExistsException() — EventAlreadyExistsException")
-    class HandleEventAlreadyExistsException {
-
-        /**
-         * Verifies that a 409 response with the correct status, message, and path
-         * is returned when a duplicate event ID is detected.
-         */
-        @Test
-        @DisplayName("should return 409 with error details when EventAlreadyExistsException is thrown")
-        void handleEventAlreadyExistsException_returns409() {
-            // given
-            EventAlreadyExistsException ex = new EventAlreadyExistsException("EVT-001");
-
-            // when
-            ResponseEntity<ApiErrorResponse> response =
-                    handler.handleCatalogAlreadyExistsException(ex, request);
-
-            // then
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-            assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().status()).isEqualTo(409);
-            assertThat(response.getBody().error()).isEqualTo("Conflict");
-            assertThat(response.getBody().message()).contains("EVT-001");
-            assertThat(response.getBody().path()).isEqualTo("/api/v1/events/EVT-001");
-            assertThat(response.getBody().timestamp()).isNotNull();
-        }
-    }
-
-    // -------------------------------------------------------------------------
     // handleValidationException — MethodArgumentNotValidException → 400
     // -------------------------------------------------------------------------
 
-    /**
-     * Tests for {@link GlobalExceptionHandler#handleValidationException(MethodArgumentNotValidException, HttpServletRequest)}.
-     */
     @Nested
     @DisplayName("handleValidationException() — MethodArgumentNotValidException")
     class HandleValidationException {
 
-        /**
-         * Verifies that a 400 response containing the field name and validation message
-         * is returned for a single field error.
-         */
         @Test
         @DisplayName("should return 400 with field error message for single validation failure")
         void handleValidationException_singleError_returns400() {
@@ -161,10 +101,6 @@ class GlobalExceptionHandlerTest {
                     .contains("Title is required");
         }
 
-        /**
-         * Verifies that all field errors are concatenated into a single comma-separated
-         * message when multiple validation failures occur.
-         */
         @Test
         @DisplayName("should concatenate multiple field errors into a single message")
         void handleValidationException_multipleErrors_concatenatesAll() {
@@ -194,17 +130,10 @@ class GlobalExceptionHandlerTest {
     // handleGenericException — Exception → 500
     // -------------------------------------------------------------------------
 
-    /**
-     * Tests for {@link GlobalExceptionHandler#handleGenericException(Exception, HttpServletRequest)}.
-     */
     @Nested
     @DisplayName("handleGenericException() — unexpected Exception")
     class HandleGenericException {
 
-        /**
-         * Verifies that a 500 response with a generic user-friendly message is
-         * returned for any unhandled exception.
-         */
         @Test
         @DisplayName("should return 500 with generic message for unexpected exceptions")
         void handleGenericException_returns500() {

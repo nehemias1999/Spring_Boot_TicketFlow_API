@@ -26,11 +26,6 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link TicketPersistenceAdapter}.
- * <p>
- * Both {@link ITicketJpaRepository} and {@link ITicketPersistenceMapper} are mocked
- * so that only the adapter's delegation and conversion logic is exercised.
- * No database connection is required.
- * </p>
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("TicketPersistenceAdapter — unit tests")
@@ -139,41 +134,6 @@ class TicketPersistenceAdapterTest {
 
             // then
             assertThat(result).isEmpty();
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // existsByIdAndDeletedFalse()
-    // -------------------------------------------------------------------------
-
-    @Nested
-    @DisplayName("existsByIdAndDeletedFalse()")
-    class ExistsByIdAndDeletedFalse {
-
-        @Test
-        @DisplayName("should return true when an active ticket with the given ID exists")
-        void existsByIdAndDeletedFalse_exists() {
-            // given
-            when(ticketJpaRepository.existsByIdAndDeletedFalse("TKT-001")).thenReturn(true);
-
-            // when
-            boolean result = ticketPersistenceAdapter.existsByIdAndDeletedFalse("TKT-001");
-
-            // then
-            assertThat(result).isTrue();
-        }
-
-        @Test
-        @DisplayName("should return false when no active ticket with the given ID exists")
-        void existsByIdAndDeletedFalse_notExists() {
-            // given
-            when(ticketJpaRepository.existsByIdAndDeletedFalse("TKT-999")).thenReturn(false);
-
-            // when
-            boolean result = ticketPersistenceAdapter.existsByIdAndDeletedFalse("TKT-999");
-
-            // then
-            assertThat(result).isFalse();
         }
     }
 

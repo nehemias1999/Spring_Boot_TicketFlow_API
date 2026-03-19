@@ -1,7 +1,6 @@
 package com.ticketflow.ticket_service.shared.infrastructure.exception;
 
 import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCancelledException;
-import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyExistsException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -18,8 +17,10 @@ import java.util.stream.Collectors;
  * Global exception handler that intercepts exceptions thrown by controllers
  * and returns standardized {@link ApiErrorResponse} objects.
  * <p>
- * Handles domain-specific exceptions (not found, already exists, already cancelled),
- * validation errors, and unexpected server errors.
+ * Handles domain-specific exceptions (not found, already cancelled),
+ * validation errors, and unexpected server errors. Includes the
+ * {@code X-Correlation-Id} header value in every error response for
+ * distributed tracing.
  * </p>
  *
  * @author TicketFlow Team
@@ -27,6 +28,8 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final String CORRELATION_HEADER = "X-Correlation-Id";
 
     /**
      * Handles {@link TicketNotFoundException} when a requested ticket is not found.
@@ -45,34 +48,11 @@ public class GlobalExceptionHandler {
                 HttpStatus.NOT_FOUND.value(),
                 HttpStatus.NOT_FOUND.getReasonPhrase(),
                 ex.getMessage(),
-                request.getRequestURI()
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
         );
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
-    }
-
-    /**
-     * Handles {@link TicketAlreadyExistsException} when attempting to create
-     * a ticket with a duplicate ID.
-     *
-     * @param ex      the exception thrown
-     * @param request the HTTP request that triggered the error
-     * @return a 409 Conflict response with error details
-     */
-    @ExceptionHandler(TicketAlreadyExistsException.class)
-    public ResponseEntity<ApiErrorResponse> handleTicketAlreadyExistsException(
-            TicketAlreadyExistsException ex, HttpServletRequest request) {
-        log.warn("Ticket conflict on request to '{}': {}", request.getRequestURI(), ex.getMessage());
-
-        ApiErrorResponse errorResponse = new ApiErrorResponse(
-                LocalDateTime.now(),
-                HttpStatus.CONFLICT.value(),
-                HttpStatus.CONFLICT.getReasonPhrase(),
-                ex.getMessage(),
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
     }
 
     /**
@@ -93,7 +73,8 @@ public class GlobalExceptionHandler {
                 HttpStatus.CONFLICT.value(),
                 HttpStatus.CONFLICT.getReasonPhrase(),
                 ex.getMessage(),
-                request.getRequestURI()
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
         );
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
@@ -124,7 +105,8 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST.value(),
                 HttpStatus.BAD_REQUEST.getReasonPhrase(),
                 message,
-                request.getRequestURI()
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
         );
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
@@ -147,7 +129,8 @@ public class GlobalExceptionHandler {
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
                 "An unexpected error occurred. Please try again later.",
-                request.getRequestURI()
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
         );
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);

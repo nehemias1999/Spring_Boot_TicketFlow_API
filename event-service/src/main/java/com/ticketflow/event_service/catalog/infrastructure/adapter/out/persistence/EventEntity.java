@@ -41,7 +41,7 @@ public class EventEntity {
      * Unique business identifier provided by the client (e.g., "EVT-001").
      */
     @Id
-    @Column(name = "id", nullable = false, length = 20)
+    @Column(name = "id", nullable = false, length = 36)
     private String id;
 
     /**

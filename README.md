@@ -38,14 +38,17 @@ TicketFlow is an incremental Spring Boot microservices project. Each service is 
              │           api-gateway           │
              │           port 8080             │
              │  routing · resilience · CORS    │
-             └────────────────┬───────────────┘
-                              │ lb://event-service
-                              ▼
-             ┌────────────────────────────────┐
-             │          event-service          │
-             │           port 8081             │
-             │   CRUD events · MySQL · Flyway  │
-             └────────────────────────────────┘
+             └──────────┬───────────┬──────────┘
+                        │           │
+              lb://event-service   lb://ticket-service
+                        │           │
+                        ▼           ▼
+             ┌──────────────┐  ┌──────────────────┐
+             │ event-service│  │  ticket-service  │
+             │  port 8081   │  │   port 8082      │
+             │ CRUD events  │  │ CRUD tickets     │
+             │ MySQL·Flyway │  │ MySQL · Flyway   │
+             └──────────────┘  └──────────────────┘
 
      ┌──────────────────────────────────────────────┐
      │              discovery-service                │
@@ -60,7 +63,7 @@ TicketFlow is an incremental Spring Boot microservices project. Each service is 
      └──────────────────────────────────────────────┘
 ```
 
-All business services (api-gateway, event-service) follow **Hexagonal Architecture (Ports & Adapters)** combined with **Vertical Slicing**, keeping domain logic isolated from infrastructure concerns.
+All business services follow **Hexagonal Architecture (Ports & Adapters)** combined with **Vertical Slicing**, keeping domain logic isolated from infrastructure concerns.
 
 ---
 
@@ -96,10 +99,25 @@ Central **Netflix Eureka Server**. Every other microservice registers with it on
 Business microservice that manages the **event catalog** for the TicketFlow platform. Exposes a REST API consumed by the API Gateway. Responsibilities:
 - Full CRUD with soft-delete support
 - Paginated and filterable event listings
+- Server-generated UUID identifiers
 - Schema management via Flyway migrations
 - Jakarta Bean Validation on all inputs
+- Swagger UI at `/swagger-ui.html`
 
 → [event-service/README.md](event-service/README.md)
+
+---
+
+### ticket-service
+Business microservice that manages **ticket purchases and transfers** for the TicketFlow platform. Exposes a REST API consumed by the API Gateway. Responsibilities:
+- Full CRUD with soft-delete support and dedicated cancel endpoint
+- Paginated and filterable ticket listings
+- Server-generated UUID identifiers
+- Schema management via Flyway migrations
+- Jakarta Bean Validation on all inputs
+- Swagger UI at `/swagger-ui.html`
+
+→ [ticket-service/README.md](ticket-service/README.md)
 
 ---
 
@@ -119,6 +137,7 @@ Business microservice that manages the **event catalog** for the TicketFlow plat
 | Migrations | Flyway |
 | Mapping | MapStruct 1.6.3 |
 | Validation | Jakarta Bean Validation |
+| API Docs | springdoc-openapi 2.8.8 (Swagger UI) |
 | Monitoring | Spring Boot Actuator |
 | Testing | JUnit 5, Mockito, H2 (in-memory) |
 | Build | Maven |
@@ -134,7 +153,7 @@ Business microservice that manages the **event catalog** for the TicketFlow plat
 | config-server | `8088` |
 | api-gateway | `8080` |
 | event-service | `8081` |
-| ticket-service *(planned)* | `8082` |
+| ticket-service | `8082` |
 
 ---
 
@@ -146,6 +165,7 @@ Services must be started in the following order due to registration and configur
 1. discovery-service   ← Eureka must be up before anyone registers
 2. config-server       ← must be up before clients fetch their config
 3. event-service       ← registers with Eureka, fetches config
+   ticket-service      ← registers with Eureka, fetches config (can start in parallel with event-service)
 4. api-gateway         ← registers with Eureka, fetches routes from config
 ```
 
@@ -159,7 +179,7 @@ Services must be started in the following order due to registration and configur
 
 - Java 21
 - Maven 3.9+
-- MySQL 8 running locally on port `3306` (required by event-service)
+- MySQL 8 running locally on port `3306` (required by event-service and ticket-service)
 
 ### Steps
 
@@ -177,7 +197,10 @@ cd config-server && ./mvnw spring-boot:run
 # 4. Start event-service (new terminal)
 cd event-service && ./mvnw spring-boot:run
 
-# 5. Start api-gateway (new terminal)
+# 5. Start ticket-service (new terminal)
+cd ticket-service && ./mvnw spring-boot:run
+
+# 6. Start api-gateway (new terminal)
 cd api-gateway && ./mvnw spring-boot:run
 ```
 
@@ -187,8 +210,12 @@ Once all services are up:
 |-----|-------------|
 | `http://localhost:8761` | Eureka dashboard — registered instances |
 | `http://localhost:8080/api/v1/events` | Events API via the gateway |
+| `http://localhost:8080/api/v1/tickets` | Tickets API via the gateway |
+| `http://localhost:8081/swagger-ui.html` | Event-service Swagger UI |
+| `http://localhost:8082/swagger-ui.html` | Ticket-service Swagger UI |
 | `http://localhost:8080/actuator/health` | Gateway health |
 | `http://localhost:8081/actuator/health` | Event-service health |
+| `http://localhost:8082/actuator/health` | Ticket-service health |
 | `http://localhost:8088/event-service/default` | Raw config served to event-service |
 
 ---
@@ -198,9 +225,10 @@ Once all services are up:
 Each service has an isolated test configuration (H2 / no Eureka / no config-server) so tests run without any external dependencies.
 
 ```bash
-# From the root — run tests for all services
+# From each service directory
+cd event-service  && ./mvnw test
+cd ticket-service && ./mvnw test
+cd api-gateway    && ./mvnw test
+cd config-server  && ./mvnw test
 cd discovery-service && ./mvnw test
-cd config-server     && ./mvnw test
-cd api-gateway       && ./mvnw test
-cd event-service     && ./mvnw test
 ```

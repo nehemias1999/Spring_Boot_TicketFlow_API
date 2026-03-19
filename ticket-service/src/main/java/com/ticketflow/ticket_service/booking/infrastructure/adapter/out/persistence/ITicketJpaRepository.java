@@ -24,11 +24,4 @@ public interface ITicketJpaRepository extends JpaRepository<TicketEntity, String
      */
     Optional<TicketEntity> findByIdAndDeletedFalse(String id);
 
-    /**
-     * Checks whether an active ticket entity with the given ID exists.
-     *
-     * @param id the unique business identifier
-     * @return {@code true} if an active entity exists, {@code false} otherwise
-     */
-    boolean existsByIdAndDeletedFalse(String id);
 }

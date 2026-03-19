@@ -4,7 +4,6 @@ import com.ticketflow.event_service.catalog.application.dto.request.CreateEventR
 import com.ticketflow.event_service.catalog.application.dto.request.UpdateEventRequest;
 import com.ticketflow.event_service.catalog.application.dto.response.EventResponse;
 import com.ticketflow.event_service.catalog.application.mapper.IEventApplicationMapper;
-import com.ticketflow.event_service.catalog.domain.exception.EventAlreadyExistsException;
 import com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException;
 import com.ticketflow.event_service.catalog.domain.model.Event;
 import com.ticketflow.event_service.catalog.domain.port.out.IEventPersistencePort;
@@ -57,12 +56,6 @@ class EventServiceTest {
     // Helpers
     // -------------------------------------------------------------------------
 
-    /**
-     * Builds a sample {@link Event} domain object for the given ID.
-     *
-     * @param id the event identifier
-     * @return a pre-populated Event
-     */
     private static Event buildEvent(String id) {
         return Event.builder()
                 .id(id)
@@ -76,34 +69,17 @@ class EventServiceTest {
                 .build();
     }
 
-    /**
-     * Builds a sample {@link EventResponse} DTO for the given ID.
-     *
-     * @param id the event identifier
-     * @return a pre-populated EventResponse
-     */
     private static EventResponse buildResponse(String id) {
         return new EventResponse(id, "Test Event", "Test description",
                 "2026-10-15 20:00", "Test Location",
                 BigDecimal.valueOf(100.00), LocalDateTime.now(), null);
     }
 
-    /**
-     * Builds a sample {@link CreateEventRequest} for the given ID.
-     *
-     * @param id the event identifier
-     * @return a valid CreateEventRequest
-     */
-    private static CreateEventRequest buildCreateRequest(String id) {
-        return new CreateEventRequest(id, "Test Event", "Test description",
+    private static CreateEventRequest buildCreateRequest() {
+        return new CreateEventRequest("Test Event", "Test description",
                 "2026-10-15 20:00", "Test Location", BigDecimal.valueOf(100.00));
     }
 
-    /**
-     * Builds a sample {@link UpdateEventRequest} with updated field values.
-     *
-     * @return a valid UpdateEventRequest
-     */
     private static UpdateEventRequest buildUpdateRequest() {
         return new UpdateEventRequest("Updated Title", "Updated description",
                 "2026-11-20 18:00", "Updated Location", BigDecimal.valueOf(150.00));
@@ -113,28 +89,20 @@ class EventServiceTest {
     // create()
     // -------------------------------------------------------------------------
 
-    /**
-     * Tests for the {@link EventService#create(CreateEventRequest)} method.
-     */
     @Nested
     @DisplayName("create()")
     class Create {
 
-        /**
-         * Verifies that a new event is persisted and the response DTO is returned
-         * when no active event with the same ID exists.
-         */
         @Test
-        @DisplayName("should create and return EventResponse when ID does not exist")
+        @DisplayName("should generate a UUID id, persist, and return EventResponse")
         void create_success() {
             // given
-            CreateEventRequest request = buildCreateRequest("EVT-001");
-            Event domain = buildEvent("EVT-001");
-            EventResponse response = buildResponse("EVT-001");
+            CreateEventRequest request = buildCreateRequest();
+            Event domain = buildEvent("some-uuid");
+            EventResponse response = buildResponse("some-uuid");
 
-            when(eventPersistencePort.existsByIdAndDeletedFalse("EVT-001")).thenReturn(false);
             when(eventApplicationMapper.toDomain(request)).thenReturn(domain);
-            when(eventPersistencePort.save(domain)).thenReturn(domain);
+            when(eventPersistencePort.save(any(Event.class))).thenReturn(domain);
             when(eventApplicationMapper.toResponse(domain)).thenReturn(response);
 
             // when
@@ -142,26 +110,7 @@ class EventServiceTest {
 
             // then
             assertThat(result).isEqualTo(response);
-            verify(eventPersistencePort).save(domain);
-        }
-
-        /**
-         * Verifies that {@link EventAlreadyExistsException} is thrown and no save
-         * is attempted when an active event with the same ID already exists.
-         */
-        @Test
-        @DisplayName("should throw EventAlreadyExistsException when ID already exists")
-        void create_alreadyExists_throwsException() {
-            // given
-            CreateEventRequest request = buildCreateRequest("EVT-001");
-            when(eventPersistencePort.existsByIdAndDeletedFalse("EVT-001")).thenReturn(true);
-
-            // when / then
-            assertThatThrownBy(() -> eventService.create(request))
-                    .isInstanceOf(EventAlreadyExistsException.class)
-                    .hasMessageContaining("EVT-001");
-
-            verify(eventPersistencePort, never()).save(any());
+            verify(eventPersistencePort).save(any(Event.class));
         }
     }
 
@@ -169,17 +118,10 @@ class EventServiceTest {
     // getById()
     // -------------------------------------------------------------------------
 
-    /**
-     * Tests for the {@link EventService#getById(String)} method.
-     */
     @Nested
     @DisplayName("getById()")
     class GetById {
 
-        /**
-         * Verifies that the correct {@link EventResponse} is returned when an
-         * active event with the given ID is found.
-         */
         @Test
         @DisplayName("should return EventResponse when event is found by ID")
         void getById_success() {
@@ -198,10 +140,6 @@ class EventServiceTest {
             assertThat(result).isEqualTo(response);
         }
 
-        /**
-         * Verifies that {@link EventNotFoundException} is thrown when no active
-         * event with the given ID exists.
-         */
         @Test
         @DisplayName("should throw EventNotFoundException when event is not found")
         void getById_notFound_throwsException() {
@@ -220,17 +158,10 @@ class EventServiceTest {
     // getAll()
     // -------------------------------------------------------------------------
 
-    /**
-     * Tests for the {@link EventService#getAll(org.springframework.data.domain.Pageable)} method.
-     */
     @Nested
     @DisplayName("getAll()")
     class GetAll {
 
-        /**
-         * Verifies that a page of {@link EventResponse} objects is returned
-         * when active events exist in the store.
-         */
         @Test
         @DisplayName("should return paginated EventResponse list when active events exist")
         void getAll_success() {
@@ -251,9 +182,6 @@ class EventServiceTest {
             assertThat(result.getTotalElements()).isEqualTo(1);
         }
 
-        /**
-         * Verifies that an empty page is returned when no active events exist.
-         */
         @Test
         @DisplayName("should return empty page when no active events exist")
         void getAll_empty() {
@@ -268,9 +196,6 @@ class EventServiceTest {
             assertThat(result.getContent()).isEmpty();
         }
 
-        /**
-         * Verifies that title and location filters are forwarded to the persistence port.
-         */
         @Test
         @DisplayName("should forward title and location filters to persistence port")
         void getAll_withFilters() {
@@ -296,17 +221,10 @@ class EventServiceTest {
     // update()
     // -------------------------------------------------------------------------
 
-    /**
-     * Tests for the {@link EventService#update(String, UpdateEventRequest)} method.
-     */
     @Nested
     @DisplayName("update()")
     class Update {
 
-        /**
-         * Verifies that the mapper applies the update to the existing domain object
-         * and the updated event is persisted and returned.
-         */
         @Test
         @DisplayName("should update and return EventResponse when event is found")
         void update_success() {
@@ -330,10 +248,6 @@ class EventServiceTest {
             verify(eventPersistencePort).update(existing);
         }
 
-        /**
-         * Verifies that {@link EventNotFoundException} is thrown and no update
-         * is attempted when the target event does not exist.
-         */
         @Test
         @DisplayName("should throw EventNotFoundException when event to update is not found")
         void update_notFound_throwsException() {
@@ -355,17 +269,10 @@ class EventServiceTest {
     // delete()
     // -------------------------------------------------------------------------
 
-    /**
-     * Tests for the {@link EventService#delete(String)} method.
-     */
     @Nested
     @DisplayName("delete()")
     class Delete {
 
-        /**
-         * Verifies that the {@code deleted} flag is set to {@code true} and
-         * the event is persisted after a soft-delete call.
-         */
         @Test
         @DisplayName("should set deleted flag to true and persist when event is found")
         void delete_success() {
@@ -382,10 +289,6 @@ class EventServiceTest {
             verify(eventPersistencePort).update(existing);
         }
 
-        /**
-         * Verifies that {@link EventNotFoundException} is thrown and no update
-         * is attempted when the target event does not exist.
-         */
         @Test
         @DisplayName("should throw EventNotFoundException when event to delete is not found")
         void delete_notFound_throwsException() {

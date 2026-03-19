@@ -4,6 +4,10 @@ import com.ticketflow.event_service.catalog.application.dto.response.EventRespon
 import com.ticketflow.event_service.catalog.application.dto.request.CreateEventRequest;
 import com.ticketflow.event_service.catalog.application.dto.request.UpdateEventRequest;
 import com.ticketflow.event_service.catalog.domain.port.in.IEventService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,30 +44,31 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/events")
 @RequiredArgsConstructor
+@Tag(name = "Events", description = "Event management endpoints")
 public class EventController {
+
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final IEventService eventServicePort;
 
-    /**
-     * Creates a new event entry.
-     *
-     * @param request the validated creation request body
-     * @return the created event with HTTP 201 status
-     */
+    @Operation(summary = "Create a new event")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Event created successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request body")
+    })
     @PostMapping
     public ResponseEntity<EventResponse> create(@Valid @RequestBody CreateEventRequest request) {
-        log.info("POST /api/v1/events - Request received to create event with id: {}", request.id());
+        log.info("POST /api/v1/events - Request received to create event");
         EventResponse response = eventServicePort.create(request);
         log.info("POST /api/v1/events - Event created successfully with id: {}", response.id());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    /**
-     * Retrieves a single event entry by its unique ID.
-     *
-     * @param id the unique business identifier (path variable)
-     * @return the event data with HTTP 200 status
-     */
+    @Operation(summary = "Get an event by ID")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Event found"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
     @GetMapping("/{id}")
     public ResponseEntity<EventResponse> getById(@PathVariable String id) {
         log.info("GET /api/v1/events/{} - Request received to retrieve event", id);
@@ -72,13 +77,8 @@ public class EventController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Retrieves a paginated list of all active event entries.
-     *
-     * @param page the page number (zero-based), defaults to 0
-     * @param size the number of items per page, defaults to 10
-     * @return a page of event entries with HTTP 200 status
-     */
+    @Operation(summary = "List events with optional filters and pagination")
+    @ApiResponse(responseCode = "200", description = "Paginated list of events")
     @GetMapping
     public ResponseEntity<Page<EventResponse>> getAll(
             @RequestParam(defaultValue = "0") int page,
@@ -87,6 +87,7 @@ public class EventController {
             @RequestParam(required = false) String location,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
+        size = Math.min(size, MAX_PAGE_SIZE);
         log.info("GET /api/v1/events - Request received - page: {}, size: {}, title: {}, location: {}, sortBy: {}, sortDir: {}",
                 page, size, title, location, sortBy, sortDir);
         Sort sort = "asc".equalsIgnoreCase(sortDir) ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
@@ -96,13 +97,12 @@ public class EventController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Updates an existing event entry with the provided data.
-     *
-     * @param id      the unique business identifier (path variable)
-     * @param request the validated update request body
-     * @return the updated event with HTTP 200 status
-     */
+    @Operation(summary = "Update an existing event")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Event updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request body"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
     @PutMapping("/{id}")
     public ResponseEntity<EventResponse> update(
             @PathVariable String id,
@@ -113,16 +113,11 @@ public class EventController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Soft-deletes an event entry by its unique ID.
-     * <p>
-     * The record is not physically removed from the database; it is
-     * marked as deleted and excluded from future active queries.
-     * </p>
-     *
-     * @param id the unique business identifier (path variable)
-     * @return HTTP 204 No Content on success
-     */
+    @Operation(summary = "Soft-delete an event by ID")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Event deleted successfully"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable String id) {
         log.info("DELETE /api/v1/events/{} - Request received to soft-delete event", id);
@@ -132,4 +127,3 @@ public class EventController {
     }
 
 }
-

@@ -43,13 +43,13 @@ public class TicketEntity {
      * Unique business identifier provided by the client (e.g., "TKT-001").
      */
     @Id
-    @Column(name = "id", nullable = false, length = 20)
+    @Column(name = "id", nullable = false, length = 36)
     private String id;
 
     /**
      * Reference to the event this ticket belongs to.
      */
-    @Column(name = "event_id", nullable = false, length = 20)
+    @Column(name = "event_id", nullable = false, length = 36)
     private String eventId;
 
     /**

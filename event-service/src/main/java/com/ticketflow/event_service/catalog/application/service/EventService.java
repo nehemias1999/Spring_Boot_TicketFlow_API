@@ -4,7 +4,6 @@ import com.ticketflow.event_service.catalog.application.dto.response.EventRespon
 import com.ticketflow.event_service.catalog.application.dto.request.CreateEventRequest;
 import com.ticketflow.event_service.catalog.application.dto.request.UpdateEventRequest;
 import com.ticketflow.event_service.catalog.application.mapper.IEventApplicationMapper;
-import com.ticketflow.event_service.catalog.domain.exception.EventAlreadyExistsException;
 import com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException;
 import com.ticketflow.event_service.catalog.domain.model.Event;
 import com.ticketflow.event_service.catalog.domain.port.in.IEventService;
@@ -16,12 +15,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 /**
  * Application service implementing the {@link IEventService} inbound port.
  * <p>
  * Contains all business logic for event CRUD operations including
- * existence validation, soft-delete handling, and delegation to the
- * persistence outbound port.
+ * soft-delete handling and delegation to the persistence outbound port.
  * </p>
  *
  * @author TicketFlow Team
@@ -38,19 +38,16 @@ public class EventService implements IEventService {
     /**
      * {@inheritDoc}
      * <p>
-     * Validates that no active event with the same ID exists before persisting.
+     * Generates a UUID as the event ID server-side before persisting.
      * </p>
      */
     @Override
     public EventResponse create(CreateEventRequest request) {
-        log.info("Creating event entry with id: {}", request.id());
-
-        if (eventPersistencePort.existsByIdAndDeletedFalse(request.id())) {
-            log.warn("Event creation failed - event with id '{}' already exists", request.id());
-            throw new EventAlreadyExistsException(request.id());
-        }
+        String id = UUID.randomUUID().toString();
+        log.info("Creating event entry with generated id: {}", id);
 
         Event event = eventApplicationMapper.toDomain(request);
+        event.setId(id);
         Event savedEvent = eventPersistencePort.save(event);
 
         log.info("Event entry created successfully with id: {}", savedEvent.getId());
@@ -148,4 +145,3 @@ public class EventService implements IEventService {
     }
 
 }
-

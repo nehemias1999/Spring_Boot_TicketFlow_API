@@ -5,7 +5,6 @@ import com.ticketflow.ticket_service.booking.application.dto.request.UpdateTicke
 import com.ticketflow.ticket_service.booking.application.dto.response.TicketResponse;
 import com.ticketflow.ticket_service.booking.application.mapper.ITicketApplicationMapper;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCancelledException;
-import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyExistsException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundException;
 import com.ticketflow.ticket_service.booking.domain.model.Ticket;
 import com.ticketflow.ticket_service.booking.domain.model.TicketStatus;
@@ -75,8 +74,8 @@ class TicketServiceTest {
                 LocalDateTime.now(), status, LocalDateTime.now(), null);
     }
 
-    private static CreateTicketRequest buildCreateRequest(String id) {
-        return new CreateTicketRequest(id, "EVT-001", "user-001");
+    private static CreateTicketRequest buildCreateRequest() {
+        return new CreateTicketRequest("EVT-001", "user-001");
     }
 
     private static UpdateTicketRequest buildUpdateRequest() {
@@ -92,16 +91,15 @@ class TicketServiceTest {
     class Create {
 
         @Test
-        @DisplayName("should create and return TicketResponse when ID does not exist")
+        @DisplayName("should generate a UUID id, persist, and return TicketResponse")
         void create_success() {
             // given
-            CreateTicketRequest request = buildCreateRequest("TKT-001");
-            Ticket domain = buildTicket("TKT-001", TicketStatus.CONFIRMED);
-            TicketResponse response = buildResponse("TKT-001", TicketStatus.CONFIRMED);
+            CreateTicketRequest request = buildCreateRequest();
+            Ticket domain = buildTicket("some-uuid", TicketStatus.CONFIRMED);
+            TicketResponse response = buildResponse("some-uuid", TicketStatus.CONFIRMED);
 
-            when(ticketPersistencePort.existsByIdAndDeletedFalse("TKT-001")).thenReturn(false);
             when(ticketApplicationMapper.toDomain(request)).thenReturn(domain);
-            when(ticketPersistencePort.save(domain)).thenReturn(domain);
+            when(ticketPersistencePort.save(any(Ticket.class))).thenReturn(domain);
             when(ticketApplicationMapper.toResponse(domain)).thenReturn(response);
 
             // when
@@ -109,22 +107,7 @@ class TicketServiceTest {
 
             // then
             assertThat(result).isEqualTo(response);
-            verify(ticketPersistencePort).save(domain);
-        }
-
-        @Test
-        @DisplayName("should throw TicketAlreadyExistsException when ID already exists")
-        void create_alreadyExists_throwsException() {
-            // given
-            CreateTicketRequest request = buildCreateRequest("TKT-001");
-            when(ticketPersistencePort.existsByIdAndDeletedFalse("TKT-001")).thenReturn(true);
-
-            // when / then
-            assertThatThrownBy(() -> ticketService.create(request))
-                    .isInstanceOf(TicketAlreadyExistsException.class)
-                    .hasMessageContaining("TKT-001");
-
-            verify(ticketPersistencePort, never()).save(any());
+            verify(ticketPersistencePort).save(any(Ticket.class));
         }
     }
 

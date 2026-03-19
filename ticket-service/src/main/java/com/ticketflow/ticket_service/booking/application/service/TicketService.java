@@ -5,7 +5,6 @@ import com.ticketflow.ticket_service.booking.application.dto.request.UpdateTicke
 import com.ticketflow.ticket_service.booking.application.dto.response.TicketResponse;
 import com.ticketflow.ticket_service.booking.application.mapper.ITicketApplicationMapper;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCancelledException;
-import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyExistsException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundException;
 import com.ticketflow.ticket_service.booking.domain.model.Ticket;
 import com.ticketflow.ticket_service.booking.domain.model.TicketStatus;
@@ -19,13 +18,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * Application service implementing the {@link ITicketService} inbound port.
  * <p>
  * Contains all business logic for ticket CRUD operations including
- * existence validation, cancellation guards, soft-delete handling,
- * and delegation to the persistence outbound port.
+ * cancellation guards, soft-delete handling, and delegation to the
+ * persistence outbound port.
  * </p>
  *
  * @author TicketFlow Team
@@ -42,20 +42,17 @@ public class TicketService implements ITicketService {
     /**
      * {@inheritDoc}
      * <p>
-     * Validates that no active ticket with the same ID exists before persisting.
+     * Generates a UUID as the ticket ID server-side.
      * Sets {@code purchaseDate} to now and {@code status} to {@link TicketStatus#CONFIRMED}.
      * </p>
      */
     @Override
     public TicketResponse create(CreateTicketRequest request) {
-        log.info("Creating ticket with id: {}", request.id());
-
-        if (ticketPersistencePort.existsByIdAndDeletedFalse(request.id())) {
-            log.warn("Ticket creation failed - ticket with id '{}' already exists", request.id());
-            throw new TicketAlreadyExistsException(request.id());
-        }
+        String id = UUID.randomUUID().toString();
+        log.info("Creating ticket with generated id: {}", id);
 
         Ticket ticket = ticketApplicationMapper.toDomain(request);
+        ticket.setId(id);
         ticket.setPurchaseDate(LocalDateTime.now());
         ticket.setStatus(TicketStatus.CONFIRMED);
 

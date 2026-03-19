@@ -42,11 +42,11 @@ The server also registers itself with the Eureka discovery service so that clien
 │   ├── api-gateway.yml                                         │
 │   ├── event-service.yml                                       │
 │   └── ticket-service.yml                                      │
-└────────┬──────────────────┬──────────────────────────────────┘
-         │ fetches config   │ fetches config
-         ▼                  ▼
-    api-gateway         event-service
-    (on startup)        (on startup)
+└────────┬──────────────┬──────────────┬────────────────────────┘
+         │ fetches      │ fetches      │ fetches
+         ▼              ▼              ▼
+    api-gateway    event-service  ticket-service
+    (on startup)   (on startup)   (on startup)
 ```
 
 **Startup order** — the config-server should start after the discovery-service and before any business microservice, since those services fetch their configuration on boot.
@@ -84,22 +84,6 @@ Each file under `src/main/resources/config/` maps to a microservice by its appli
 | `eureka.client.serviceUrl.defaultZone` | `http://localhost:8761/eureka/` | Eureka registration URL |
 | `eureka.instance.prefer-ip-address` | `true` | Register by IP instead of hostname |
 | `management.endpoints.web.exposure.include` | `health, info, metrics, refresh` | Exposed Actuator endpoints |
-| `management.health.circuit-breakers.enabled` | `true` | Include circuit breaker status in health |
-
-### `api-gateway.yml`
-
-| Property | Value | Description |
-|----------|-------|-------------|
-| `server.port` | `8080` | HTTP port for the api-gateway |
-| `spring.cloud.gateway.server.webflux.routes` | see below | Route definitions |
-| `spring.cloud.gateway.globalcors` | `*` origins, all methods | Global CORS policy |
-| `resilience4j.circuitbreaker.instances.eventServiceCB` | 50% threshold, 10s open | Circuit breaker for event-service |
-
-**Defined routes:**
-
-| Route ID | URI | Predicate | Filters |
-|----------|-----|-----------|---------|
-| `event-service` | `lb://event-service` | `Path=/api/v1/events/**` | CircuitBreaker + Retry (3 attempts, GET only) |
 
 ### `ticket-service.yml`
 
@@ -109,6 +93,23 @@ Each file under `src/main/resources/config/` maps to a microservice by its appli
 | `eureka.client.serviceUrl.defaultZone` | `http://localhost:8761/eureka/` | Eureka registration URL |
 | `eureka.instance.prefer-ip-address` | `true` | Register by IP instead of hostname |
 | `management.endpoints.web.exposure.include` | `health, info, metrics, refresh` | Exposed Actuator endpoints |
+
+### `api-gateway.yml`
+
+| Property | Value | Description |
+|----------|-------|-------------|
+| `server.port` | `8080` | HTTP port for the api-gateway |
+| `spring.cloud.gateway.server.webflux.routes` | see below | Route definitions |
+| `spring.cloud.gateway.globalcors` | `*` origins, all methods | Global CORS policy |
+| `resilience4j.circuitbreaker.instances.eventServiceCB` | 50% threshold, 10s open | Circuit breaker for event-service |
+| `resilience4j.circuitbreaker.instances.ticketServiceCB` | 50% threshold, 10s open | Circuit breaker for ticket-service |
+
+**Defined routes:**
+
+| Route ID | URI | Predicate | Filters |
+|----------|-----|-----------|---------|
+| `event-service` | `lb://event-service` | `Path=/api/v1/events/**` | CircuitBreaker + Retry (3 attempts, GET only) |
+| `ticket-service` | `lb://ticket-service` | `Path=/api/v1/tickets/**` | CircuitBreaker + Retry (3 attempts, GET only) |
 
 ---
 
@@ -127,6 +128,9 @@ The Config Server exposes standard Spring Cloud Config endpoints that clients us
 ```bash
 # Fetch event-service configuration (default profile)
 GET http://localhost:8088/event-service/default
+
+# Fetch ticket-service configuration as raw YAML
+GET http://localhost:8088/ticket-service-default.yml
 
 # Fetch api-gateway configuration as raw YAML
 GET http://localhost:8088/api-gateway-default.yml

@@ -31,6 +31,7 @@ public interface IEventApplicationMapper {
      * @param request the creation request DTO
      * @return a new {@link Event} domain object ready to be persisted
      */
+    @Mapping(target = "id", ignore = true)
     @Mapping(target = "deleted", constant = "false")
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)

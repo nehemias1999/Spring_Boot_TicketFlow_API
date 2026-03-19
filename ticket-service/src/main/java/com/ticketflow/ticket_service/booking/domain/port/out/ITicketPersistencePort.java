@@ -34,14 +34,6 @@ public interface ITicketPersistencePort {
     Optional<Ticket> findByIdAndDeletedFalse(String id);
 
     /**
-     * Checks whether an active ticket with the given ID exists.
-     *
-     * @param id the ticket identifier
-     * @return {@code true} if an active ticket exists, {@code false} otherwise
-     */
-    boolean existsByIdAndDeletedFalse(String id);
-
-    /**
      * Retrieves a paginated and filtered list of active tickets.
      *
      * @param eventId  optional filter by event ID

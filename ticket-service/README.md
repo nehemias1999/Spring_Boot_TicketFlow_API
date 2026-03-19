@@ -25,7 +25,7 @@ Microservice responsible for managing ticket purchases in the **TicketFlow** tic
 
 ## Overview
 
-`ticket-service` manages ticket bookings for the TicketFlow platform. It provides full CRUD operations with soft-delete support, a dedicated cancel endpoint, paginated and filterable listings, and automatic schema migrations via Flyway. The service registers itself with Eureka and is accessible through the API Gateway.
+`ticket-service` manages ticket bookings for the TicketFlow platform. It provides full CRUD operations with soft-delete support, a dedicated cancel endpoint, paginated and filterable listings, and automatic schema migrations via Flyway. Ticket IDs are server-generated UUIDs. The service registers itself with Eureka and is accessible through the API Gateway.
 
 ---
 
@@ -72,9 +72,10 @@ The service follows **Hexagonal Architecture (Ports & Adapters)** combined with 
 | `booking.domain.model` | Core domain model (`Ticket`, `TicketStatus`) |
 | `booking.domain.port.in` | Inbound port interfaces (`ITicketService`) |
 | `booking.domain.port.out` | Outbound port interfaces (`ITicketPersistencePort`) |
-| `booking.domain.exception` | Domain exceptions (`TicketNotFoundException`, `TicketAlreadyExistsException`, `TicketAlreadyCancelledException`) |
+| `booking.domain.exception` | Domain exceptions (`TicketNotFoundException`, `TicketAlreadyCancelledException`) |
 | `booking.infrastructure.adapter.out.persistence` | JPA entities, repositories, persistence adapter |
 | `shared.infrastructure.exception` | Global exception handler and `ApiErrorResponse` |
+| `shared.infrastructure.filter` | `CorrelationIdFilter` — MDC and response header |
 | `shared.infrastructure.config` | JPA auditing configuration |
 
 ---
@@ -89,6 +90,7 @@ The service follows **Hexagonal Architecture (Ports & Adapters)** combined with 
 | Persistence | Spring Data JPA, Hibernate, MySQL 8, Flyway |
 | Mapping | MapStruct 1.6.3 |
 | Validation | Jakarta Bean Validation |
+| API Docs | springdoc-openapi 2.8.8 (Swagger UI) |
 | Monitoring | Spring Boot Actuator |
 | Testing | JUnit 5, Mockito, H2 (in-memory) |
 | Build | Maven |
@@ -107,21 +109,22 @@ The service follows **Hexagonal Architecture (Ports & Adapters)** combined with 
 | `PATCH` | `/api/v1/tickets/{id}/cancel` | Cancel a ticket | — | `200 TicketResponse` |
 | `DELETE` | `/api/v1/tickets/{id}` | Soft-delete a ticket | — | `204 No Content` |
 
+Interactive documentation is available via Swagger UI at `http://localhost:8082/swagger-ui.html`.
+
 ---
 
 ### POST `/api/v1/tickets`
 
-Purchases a new ticket. Sets `purchaseDate` to now and `status` to `CONFIRMED`.
+Purchases a new ticket. Sets `purchaseDate` to now and `status` to `CONFIRMED`. The ID is generated server-side as a UUID.
 
 - **201 Created** — ticket created successfully, returns `TicketResponse`
-- **409 Conflict** — a ticket with the same ID already exists
 - **400 Bad Request** — validation failure
 
 ---
 
 ### GET `/api/v1/tickets/{id}`
 
-Retrieves a single active ticket by its unique business ID.
+Retrieves a single active ticket by its UUID.
 
 - **200 OK** — returns `TicketResponse`
 - **404 Not Found** — no active ticket with that ID
@@ -130,15 +133,15 @@ Retrieves a single active ticket by its unique business ID.
 
 ### GET `/api/v1/tickets`
 
-Returns a paginated list of active tickets with optional filters.
+Returns a paginated list of active tickets with optional filters. Page size is capped at 100.
 
 | Query Parameter | Type | Default | Description |
 |-----------------|------|---------|-------------|
 | `page` | int | `0` | Page number (zero-based) |
-| `size` | int | `10` | Items per page |
+| `size` | int | `10` | Items per page (max 100) |
 | `eventId` | String | — | Filter by event ID (exact match) |
 | `userId` | String | — | Filter by user ID (exact match) |
-| `status` | String | — | Filter by status (`CONFIRMED`, `CANCELLED`, `PENDING`) |
+| `status` | String | — | Filter by status (`CONFIRMED` or `CANCELLED`) |
 | `sortBy` | String | `createdAt` | Field to sort by |
 | `sortDir` | String | `desc` | Sort direction: `asc` or `desc` |
 
@@ -158,7 +161,7 @@ Transfers a ticket to a new owner (updates `userId`).
 
 ### PATCH `/api/v1/tickets/{id}/cancel`
 
-Cancels a confirmed or pending ticket.
+Cancels a confirmed ticket.
 
 - **200 OK** — returns `TicketResponse` with `status: CANCELLED`
 - **404 Not Found** — ticket does not exist
@@ -181,16 +184,14 @@ Soft-deletes a ticket. The record is marked `deleted = true` and excluded from a
 
 ```json
 {
-  "id":      "TKT-001",
-  "eventId": "EVT-001",
+  "eventId": "550e8400-e29b-41d4-a716-446655440000",
   "userId":  "user-001"
 }
 ```
 
 | Field | Type | Constraints |
 |-------|------|-------------|
-| `id` | String | Required, max 20 characters |
-| `eventId` | String | Required, max 20 characters |
+| `eventId` | String | Required, max 36 characters |
 | `userId` | String | Required, max 50 characters |
 
 ---
@@ -213,8 +214,8 @@ Soft-deletes a ticket. The record is marked `deleted = true` and excluded from a
 
 ```json
 {
-  "id":           "TKT-001",
-  "eventId":      "EVT-001",
+  "id":           "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+  "eventId":      "550e8400-e29b-41d4-a716-446655440000",
   "userId":       "user-001",
   "purchaseDate": "2026-03-11T10:00:00",
   "status":       "CONFIRMED",
@@ -225,11 +226,11 @@ Soft-deletes a ticket. The record is marked `deleted = true` and excluded from a
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | String | Unique business identifier |
+| `id` | String | Server-generated UUID |
 | `eventId` | String | Associated event ID |
 | `userId` | String | Ticket owner |
 | `purchaseDate` | LocalDateTime | When the ticket was purchased |
-| `status` | TicketStatus | `CONFIRMED`, `CANCELLED`, or `PENDING` |
+| `status` | TicketStatus | `CONFIRMED` or `CANCELLED` |
 | `createdAt` | LocalDateTime | Creation timestamp |
 | `updatedAt` | LocalDateTime | Last update timestamp (nullable) |
 
@@ -241,11 +242,12 @@ Returned by all endpoints on error conditions.
 
 ```json
 {
-  "timestamp": "2026-03-11T10:00:00",
-  "status":    404,
-  "error":     "Not Found",
-  "message":   "Ticket with id 'TKT-999' not found",
-  "path":      "/api/v1/tickets/TKT-999"
+  "timestamp":     "2026-03-11T10:00:00",
+  "status":        404,
+  "error":         "Not Found",
+  "message":       "Ticket with id '3f2504e0-...' not found",
+  "path":          "/api/v1/tickets/3f2504e0-...",
+  "correlationId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
 }
 ```
 
@@ -256,17 +258,20 @@ Returned by all endpoints on error conditions.
 | `error` | String | HTTP status reason phrase |
 | `message` | String | Human-readable error description |
 | `path` | String | Request URI that triggered the error |
+| `correlationId` | String | Value of the `X-Correlation-Id` header on the request |
 
 ---
 
 ## Database Schema
 
-Schema is managed by **Flyway** (migration: `db/migration/V1__create_tickets_table.sql`).
+Schema is managed by **Flyway** migrations.
+
+**V1** — creates the `tickets` table:
 
 ```sql
 CREATE TABLE IF NOT EXISTS tickets (
-    id            VARCHAR(20)  NOT NULL,
-    event_id      VARCHAR(20)  NOT NULL,
+    id            VARCHAR(36)  NOT NULL,
+    event_id      VARCHAR(36)  NOT NULL,
     user_id       VARCHAR(50)  NOT NULL,
     purchase_date DATETIME     NOT NULL,
     status        VARCHAR(20)  NOT NULL,
@@ -277,13 +282,20 @@ CREATE TABLE IF NOT EXISTS tickets (
 );
 ```
 
+**V2** — extends `id` and `event_id` columns to accommodate UUIDs:
+
+```sql
+ALTER TABLE tickets MODIFY COLUMN id       VARCHAR(36) NOT NULL;
+ALTER TABLE tickets MODIFY COLUMN event_id VARCHAR(36) NOT NULL;
+```
+
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | VARCHAR(20) | Business-supplied primary key |
-| `event_id` | VARCHAR(20) | Reference to an event |
+| `id` | VARCHAR(36) | Server-generated UUID primary key |
+| `event_id` | VARCHAR(36) | Reference to an event |
 | `user_id` | VARCHAR(50) | Reference to the purchasing user |
 | `purchase_date` | DATETIME | Set on ticket creation |
-| `status` | VARCHAR(20) | `CONFIRMED`, `CANCELLED`, or `PENDING` |
+| `status` | VARCHAR(20) | `CONFIRMED` or `CANCELLED` |
 | `deleted` | BOOLEAN | Soft-delete flag (default `false`) |
 | `created_at` | DATETIME | Set by JPA auditing on insert |
 | `updated_at` | DATETIME | Set by JPA auditing on update (nullable) |
@@ -368,6 +380,10 @@ management:
 ```
 
 Tests use an **H2 in-memory database** — no external MySQL instance is required. Flyway is disabled in the test profile to allow Hibernate to manage the schema against H2.
+
+The test suite includes:
+- **Unit tests** — `TicketServiceTest`, `TicketControllerTest`, `TicketPersistenceAdapterTest`, `GlobalExceptionHandlerTest` (JUnit 5 + Mockito)
+- **Integration tests** — `TicketIntegrationTest` (`@SpringBootTest` + `@AutoConfigureMockMvc` + H2, full CRUD and cancel lifecycle)
 
 ---
 

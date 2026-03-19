@@ -13,9 +13,9 @@ import java.math.BigDecimal;
  * <p>
  * All fields are validated using Jakarta Bean Validation constraints
  * to ensure data integrity before reaching the domain layer.
+ * The event ID is generated server-side as a UUID.
  * </p>
  *
- * @param id          unique business identifier (e.g., "EVT-001"), max 20 characters
  * @param title       name of the event (e.g., "Lollapalooza 2026"), between 3 and 150 characters
  * @param description short summary of the event, max 500 characters
  * @param date        date and time of the event as a string (e.g., "2026-10-15 20:00")
@@ -24,10 +24,6 @@ import java.math.BigDecimal;
  * @author TicketFlow Team
  */
 public record CreateEventRequest(
-
-        @NotBlank(message = "ID is required")
-        @Size(max = 20, message = "ID must not exceed 20 characters")
-        String id,
 
         @NotBlank(message = "Title is required")
         @Size(min = 3, max = 150, message = "Title must be between 3 and 150 characters")

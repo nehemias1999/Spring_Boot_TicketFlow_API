@@ -30,15 +30,15 @@ Service registry for the **TicketFlow** ticket reservation system. Acts as the c
 ## Role in the Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     discovery-service                        │
-│                   (Netflix Eureka Server)                    │
-│                    localhost:8761                            │
-└────────┬──────────────┬──────────────┬──────────────────────┘
-         │ registers    │ registers    │ registers
-         ▼              ▼              ▼
-  config-server    api-gateway    event-service
-  (port 8088)      (port 8080)    (port 8081)
+┌──────────────────────────────────────────────────────────────┐
+│                     discovery-service                         │
+│                   (Netflix Eureka Server)                     │
+│                    localhost:8761                             │
+└───┬──────────────┬──────────────┬──────────────┬─────────────┘
+    │ registers    │ registers    │ registers    │ registers
+    ▼              ▼              ▼              ▼
+config-server  api-gateway  event-service  ticket-service
+(port 8088)    (port 8080)  (port 8081)    (port 8082)
 ```
 
 **Startup order** — the discovery-service must be the first service started, as all other services attempt to register with Eureka on boot.

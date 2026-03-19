@@ -42,11 +42,13 @@ Single entry point for all client requests in the **TicketFlow** ticket reservat
           │  CorrelationIdFilter (global)    │
           │  CircuitBreaker + Retry (route)  │
           │  CORS (global)                   │
-          └────────────────┬────────────────┘
-                           │ lb://event-service
-                           ▼
-                     event-service
-                     (port 8081)
+          └──────────┬───────────┬───────────┘
+                     │           │
+           lb://event-service  lb://ticket-service
+                     │           │
+                     ▼           ▼
+               event-service  ticket-service
+               (port 8081)    (port 8082)
 ```
 
 **Startup order** — the discovery-service and config-server must be running before the api-gateway starts, since the gateway registers with Eureka and fetches its routes from the config-server.
@@ -73,7 +75,8 @@ Routes are defined in `config-server/src/main/resources/config/api-gateway.yml` 
 
 | Route ID | URI | Predicate | Description |
 |----------|-----|-----------|-------------|
-| `event-service` | `lb://event-service` | `Path=/api/v1/events/**` | Forwards all event API requests to the event-service, resolved via Eureka load balancer |
+| `event-service` | `lb://event-service` | `Path=/api/v1/events/**` | Forwards all event API requests to event-service via Eureka |
+| `ticket-service` | `lb://ticket-service` | `Path=/api/v1/tickets/**` | Forwards all ticket API requests to ticket-service via Eureka |
 
 ---
 
@@ -91,7 +94,7 @@ Applied to every request before it reaches any route filter or downstream servic
 
 ### Per-route — CircuitBreaker
 
-Wraps the `event-service` route with a Resilience4j circuit breaker named `eventServiceCB`.
+Both routes are wrapped with independent Resilience4j circuit breakers (`eventServiceCB` and `ticketServiceCB`) with identical configuration:
 
 | Property | Value |
 |----------|-------|
@@ -101,11 +104,11 @@ Wraps the `event-service` route with a Resilience4j circuit breaker named `event
 | Calls permitted in half-open state | 3 |
 | Auto transition to half-open | enabled |
 
-When the circuit is open, requests are forwarded to `/fallback/events` instead of the downstream service.
+When a circuit is open, requests are forwarded to the corresponding fallback endpoint (`/fallback/events` or `/fallback/tickets`).
 
 ### Per-route — Retry
 
-Automatically retries failed `GET` requests to the `event-service`.
+Automatically retries failed `GET` requests to both downstream services.
 
 | Property | Value |
 |----------|-------|
@@ -130,7 +133,7 @@ A global CORS policy is applied to all routes:
 
 ## Fallback
 
-When the circuit breaker for the `event-service` is open, the gateway forwards the request to the internal `FallbackController`, which returns a structured `503 Service Unavailable` response:
+When a circuit breaker is open, the gateway forwards the request to the internal `FallbackController`, which returns a structured `503 Service Unavailable` response:
 
 ```json
 {
@@ -141,6 +144,8 @@ When the circuit breaker for the `event-service` is open, the gateway forwards t
   "path":      "/fallback/events"
 }
 ```
+
+The same pattern applies for `/fallback/tickets`.
 
 ---
 
@@ -189,11 +194,29 @@ spring:
                     retries: 3
                     statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE
                     methods: GET
+            - id: ticket-service
+              uri: lb://ticket-service
+              predicates:
+                - Path=/api/v1/tickets/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: ticketServiceCB
+                    fallbackUri: forward:/fallback/tickets
+                - name: Retry
+                  args:
+                    retries: 3
+                    statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE
+                    methods: GET
 
 resilience4j:
   circuitbreaker:
     instances:
       eventServiceCB:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+      ticketServiceCB:
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 10s

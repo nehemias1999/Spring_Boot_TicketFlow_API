@@ -42,14 +42,6 @@ public interface IEventPersistencePort {
     Page<Event> findAllByDeletedFalse(Pageable pageable);
 
     /**
-     * Checks whether an active (non-deleted) event with the given ID exists.
-     *
-     * @param id the unique business identifier
-     * @return {@code true} if an active event exists, {@code false} otherwise
-     */
-    boolean existsByIdAndDeletedFalse(String id);
-
-    /**
      * Retrieves a paginated and filtered list of active (non-deleted) event entries.
      *
      * @param title    optional title filter (case-insensitive LIKE)

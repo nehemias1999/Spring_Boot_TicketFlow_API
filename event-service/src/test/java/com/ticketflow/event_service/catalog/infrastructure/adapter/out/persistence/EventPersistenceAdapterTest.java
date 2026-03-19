@@ -24,11 +24,6 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link EventPersistenceAdapter}.
- * <p>
- * Both {@link IEventJpaRepository} and {@link IEventPersistenceMapper} are mocked
- * so that only the adapter's delegation and conversion logic is exercised.
- * No database connection is required.
- * </p>
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("EventPersistenceAdapter — unit tests")
@@ -47,12 +42,6 @@ class EventPersistenceAdapterTest {
     // Helpers
     // -------------------------------------------------------------------------
 
-    /**
-     * Builds a sample {@link Event} domain object for the given ID.
-     *
-     * @param id the event identifier
-     * @return a pre-populated Event domain object
-     */
     private static Event buildDomain(String id) {
         return Event.builder()
                 .id(id)
@@ -66,12 +55,6 @@ class EventPersistenceAdapterTest {
                 .build();
     }
 
-    /**
-     * Builds a sample {@link EventEntity} JPA entity for the given ID.
-     *
-     * @param id the event identifier
-     * @return a pre-populated EventEntity
-     */
     private static EventEntity buildEntity(String id) {
         return EventEntity.builder()
                 .id(id)
@@ -89,17 +72,10 @@ class EventPersistenceAdapterTest {
     // save()
     // -------------------------------------------------------------------------
 
-    /**
-     * Tests for the {@link EventPersistenceAdapter#save(Event)} method.
-     */
     @Nested
     @DisplayName("save()")
     class Save {
 
-        /**
-         * Verifies that the domain object is converted to entity, persisted via JPA,
-         * and the saved entity is converted back to a domain object.
-         */
         @Test
         @DisplayName("should convert to entity, persist, and return domain object")
         void save_success() {
@@ -124,17 +100,10 @@ class EventPersistenceAdapterTest {
     // findByIdAndDeletedFalse()
     // -------------------------------------------------------------------------
 
-    /**
-     * Tests for the {@link EventPersistenceAdapter#findByIdAndDeletedFalse(String)} method.
-     */
     @Nested
     @DisplayName("findByIdAndDeletedFalse()")
     class FindByIdAndDeletedFalse {
 
-        /**
-         * Verifies that a non-empty Optional containing the domain object is returned
-         * when the JPA repository finds the entity.
-         */
         @Test
         @DisplayName("should return Optional with domain object when entity is found")
         void findByIdAndDeletedFalse_found() {
@@ -153,10 +122,6 @@ class EventPersistenceAdapterTest {
             assertThat(result).isPresent().contains(domain);
         }
 
-        /**
-         * Verifies that an empty Optional is returned when the JPA repository
-         * finds no matching entity.
-         */
         @Test
         @DisplayName("should return empty Optional when entity is not found")
         void findByIdAndDeletedFalse_notFound() {
@@ -176,16 +141,10 @@ class EventPersistenceAdapterTest {
     // findAllByDeletedFalse()
     // -------------------------------------------------------------------------
 
-    /**
-     * Tests for the {@link EventPersistenceAdapter#findAllByDeletedFalse(org.springframework.data.domain.Pageable)} method.
-     */
     @Nested
     @DisplayName("findAllByDeletedFalse()")
     class FindAllByDeletedFalse {
 
-        /**
-         * Verifies that a page of domain objects is returned when active entities exist.
-         */
         @Test
         @DisplayName("should return page of domain objects when active events exist")
         void findAllByDeletedFalse_success() {
@@ -206,9 +165,6 @@ class EventPersistenceAdapterTest {
             assertThat(result.getTotalElements()).isEqualTo(1);
         }
 
-        /**
-         * Verifies that an empty page is returned when no active entities exist.
-         */
         @Test
         @DisplayName("should return empty page when no active events exist")
         void findAllByDeletedFalse_empty() {
@@ -225,66 +181,13 @@ class EventPersistenceAdapterTest {
     }
 
     // -------------------------------------------------------------------------
-    // existsByIdAndDeletedFalse()
-    // -------------------------------------------------------------------------
-
-    /**
-     * Tests for the {@link EventPersistenceAdapter#existsByIdAndDeletedFalse(String)} method.
-     */
-    @Nested
-    @DisplayName("existsByIdAndDeletedFalse()")
-    class ExistsByIdAndDeletedFalse {
-
-        /**
-         * Verifies that {@code true} is returned when an active entity with the
-         * given ID exists in the repository.
-         */
-        @Test
-        @DisplayName("should return true when an active event with the given ID exists")
-        void existsByIdAndDeletedFalse_exists() {
-            // given
-            when(eventJpaRepository.existsByIdAndDeletedFalse("EVT-001")).thenReturn(true);
-
-            // when
-            boolean result = eventPersistenceAdapter.existsByIdAndDeletedFalse("EVT-001");
-
-            // then
-            assertThat(result).isTrue();
-        }
-
-        /**
-         * Verifies that {@code false} is returned when no active entity with the
-         * given ID exists in the repository.
-         */
-        @Test
-        @DisplayName("should return false when no active event with the given ID exists")
-        void existsByIdAndDeletedFalse_notExists() {
-            // given
-            when(eventJpaRepository.existsByIdAndDeletedFalse("EVT-999")).thenReturn(false);
-
-            // when
-            boolean result = eventPersistenceAdapter.existsByIdAndDeletedFalse("EVT-999");
-
-            // then
-            assertThat(result).isFalse();
-        }
-    }
-
-    // -------------------------------------------------------------------------
     // update()
     // -------------------------------------------------------------------------
 
-    /**
-     * Tests for the {@link EventPersistenceAdapter#update(Event)} method.
-     */
     @Nested
     @DisplayName("update()")
     class Update {
 
-        /**
-         * Verifies that the domain object is converted to entity, merged via JPA save,
-         * and the result is converted back to a domain object.
-         */
         @Test
         @DisplayName("should convert to entity, merge via JPA save, and return updated domain")
         void update_success() {

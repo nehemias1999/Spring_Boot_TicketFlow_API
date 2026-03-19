@@ -1,6 +1,5 @@
 package com.ticketflow.event_service.shared.infrastructure.exception;
 
-import com.ticketflow.event_service.catalog.domain.exception.EventAlreadyExistsException;
 import com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -17,8 +16,9 @@ import java.util.stream.Collectors;
  * Global exception handler that intercepts exceptions thrown by controllers
  * and returns standardized {@link ApiErrorResponse} objects.
  * <p>
- * Handles domain-specific exceptions (not found, already exists),
- * validation errors, and unexpected server errors.
+ * Handles domain-specific exceptions (not found), validation errors,
+ * and unexpected server errors. Includes the {@code X-Correlation-Id}
+ * header value in every error response for distributed tracing.
  * </p>
  *
  * @author TicketFlow Team
@@ -27,8 +27,10 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final String CORRELATION_HEADER = "X-Correlation-Id";
+
     /**
-     * Handles {@link EventNotFoundException} when a requested catalog is not found.
+     * Handles {@link EventNotFoundException} when a requested event is not found.
      *
      * @param ex      the exception thrown
      * @param request the HTTP request that triggered the error
@@ -37,41 +39,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(EventNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleCatalogNotFoundException(
             EventNotFoundException ex, HttpServletRequest request) {
-        log.warn("Catalog not found on request to '{}': {}", request.getRequestURI(), ex.getMessage());
+        log.warn("Event not found on request to '{}': {}", request.getRequestURI(), ex.getMessage());
 
         ApiErrorResponse errorResponse = new ApiErrorResponse(
                 LocalDateTime.now(),
                 HttpStatus.NOT_FOUND.value(),
                 HttpStatus.NOT_FOUND.getReasonPhrase(),
                 ex.getMessage(),
-                request.getRequestURI()
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
         );
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
-    }
-
-    /**
-     * Handles {@link EventAlreadyExistsException} when attempting to create
-     * a catalog with a duplicate ID.
-     *
-     * @param ex      the exception thrown
-     * @param request the HTTP request that triggered the error
-     * @return a 409 Conflict response with error details
-     */
-    @ExceptionHandler(EventAlreadyExistsException.class)
-    public ResponseEntity<ApiErrorResponse> handleCatalogAlreadyExistsException(
-            EventAlreadyExistsException ex, HttpServletRequest request) {
-        log.warn("Catalog conflict on request to '{}': {}", request.getRequestURI(), ex.getMessage());
-
-        ApiErrorResponse errorResponse = new ApiErrorResponse(
-                LocalDateTime.now(),
-                HttpStatus.CONFLICT.value(),
-                HttpStatus.CONFLICT.getReasonPhrase(),
-                ex.getMessage(),
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
     }
 
     /**
@@ -99,7 +78,8 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST.value(),
                 HttpStatus.BAD_REQUEST.getReasonPhrase(),
                 message,
-                request.getRequestURI()
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
         );
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
@@ -122,10 +102,10 @@ public class GlobalExceptionHandler {
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
                 "An unexpected error occurred. Please try again later.",
-                request.getRequestURI()
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
         );
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
     }
 }
-

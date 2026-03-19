@@ -31,6 +31,7 @@ public interface ITicketApplicationMapper {
      * @param request the creation request DTO
      * @return a new {@link Ticket} domain object ready for business logic processing
      */
+    @Mapping(target = "id", ignore = true)
     @Mapping(target = "deleted", constant = "false")
     @Mapping(target = "purchaseDate", ignore = true)
     @Mapping(target = "status", ignore = true)

@@ -25,7 +25,7 @@ Microservice responsible for managing events in the **TicketFlow** ticket reserv
 
 ## Overview
 
-`event-service` manages the event catalog for the TicketFlow platform. It provides full CRUD operations with soft-delete support, paginated and filterable listings, and automatic schema migrations via Flyway. The service registers itself with Eureka and is accessible through the API Gateway.
+`event-service` manages the event catalog for the TicketFlow platform. It provides full CRUD operations with soft-delete support, paginated and filterable listings, and automatic schema migrations via Flyway. Event IDs are server-generated UUIDs. The service registers itself with Eureka and is accessible through the API Gateway.
 
 ---
 
@@ -71,9 +71,10 @@ The service follows **Hexagonal Architecture (Ports & Adapters)** combined with 
 | `catalog.domain.model` | Core domain model (`Event`) |
 | `catalog.domain.port.in` | Inbound port interfaces (`IEventService`) |
 | `catalog.domain.port.out` | Outbound port interfaces (`IEventPersistencePort`) |
-| `catalog.domain.exception` | Domain exceptions (`EventNotFoundException`, `EventAlreadyExistsException`) |
+| `catalog.domain.exception` | Domain exceptions (`EventNotFoundException`) |
 | `catalog.infrastructure.adapter.out.persistence` | JPA entities, repositories, persistence adapter |
 | `shared.infrastructure.exception` | Global exception handler and `ApiErrorResponse` |
+| `shared.infrastructure.filter` | `CorrelationIdFilter` — MDC and response header |
 | `shared.infrastructure.config` | JPA auditing configuration |
 
 ---
@@ -88,6 +89,7 @@ The service follows **Hexagonal Architecture (Ports & Adapters)** combined with 
 | Persistence | Spring Data JPA, Hibernate, MySQL 8, Flyway |
 | Mapping | MapStruct 1.6.3 |
 | Validation | Jakarta Bean Validation |
+| API Docs | springdoc-openapi 2.8.8 (Swagger UI) |
 | Monitoring | Spring Boot Actuator |
 | Testing | JUnit 5, Mockito, H2 (in-memory) |
 | Build | Maven |
@@ -105,21 +107,22 @@ The service follows **Hexagonal Architecture (Ports & Adapters)** combined with 
 | `PUT` | `/api/v1/events/{id}` | Update an existing event | `UpdateEventRequest` | `200 EventResponse` |
 | `DELETE` | `/api/v1/events/{id}` | Soft-delete an event | — | `204 No Content` |
 
+Interactive documentation is available via Swagger UI at `http://localhost:8081/swagger-ui.html`.
+
 ---
 
 ### POST `/api/v1/events`
 
-Creates a new event entry.
+Creates a new event. The ID is generated server-side as a UUID.
 
 - **201 Created** — event created successfully, returns `EventResponse`
-- **409 Conflict** — an event with the same ID already exists
 - **400 Bad Request** — validation failure
 
 ---
 
 ### GET `/api/v1/events/{id}`
 
-Retrieves a single active event by its unique business ID.
+Retrieves a single active event by its UUID.
 
 - **200 OK** — returns `EventResponse`
 - **404 Not Found** — no active event with that ID
@@ -128,12 +131,12 @@ Retrieves a single active event by its unique business ID.
 
 ### GET `/api/v1/events`
 
-Returns a paginated list of active events with optional filters.
+Returns a paginated list of active events with optional filters. Page size is capped at 100.
 
 | Query Parameter | Type | Default | Description |
 |-----------------|------|---------|-------------|
 | `page` | int | `0` | Page number (zero-based) |
-| `size` | int | `10` | Items per page |
+| `size` | int | `10` | Items per page (max 100) |
 | `title` | String | — | Filter by title (contains, case-insensitive) |
 | `location` | String | — | Filter by location (contains, case-insensitive) |
 | `sortBy` | String | `createdAt` | Field to sort by |
@@ -168,7 +171,6 @@ Soft-deletes an event. The record is marked `deleted = true` and excluded from a
 
 ```json
 {
-  "id":          "EVT-001",
   "title":       "Lollapalooza 2026",
   "description": "Annual music festival in Chicago",
   "date":        "2026-08-01 16:00",
@@ -179,7 +181,6 @@ Soft-deletes an event. The record is marked `deleted = true` and excluded from a
 
 | Field | Type | Constraints |
 |-------|------|-------------|
-| `id` | String | Required, max 20 characters |
 | `title` | String | Required, 3–150 characters |
 | `description` | String | Required, max 500 characters |
 | `date` | String | Required |
@@ -214,7 +215,7 @@ Soft-deletes an event. The record is marked `deleted = true` and excluded from a
 
 ```json
 {
-  "id":          "EVT-001",
+  "id":          "550e8400-e29b-41d4-a716-446655440000",
   "title":       "Lollapalooza 2026",
   "description": "Annual music festival in Chicago",
   "date":        "2026-08-01 16:00",
@@ -227,7 +228,7 @@ Soft-deletes an event. The record is marked `deleted = true` and excluded from a
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | String | Unique business identifier |
+| `id` | String | Server-generated UUID |
 | `title` | String | Event name |
 | `description` | String | Short summary |
 | `date` | String | Date and time of the event |
@@ -244,11 +245,12 @@ Returned by all endpoints on error conditions.
 
 ```json
 {
-  "timestamp": "2026-03-11T10:00:00",
-  "status":    404,
-  "error":     "Not Found",
-  "message":   "Event not found with id: EVT-999",
-  "path":      "/api/v1/events/EVT-999"
+  "timestamp":     "2026-03-11T10:00:00",
+  "status":        404,
+  "error":         "Not Found",
+  "message":       "Event not found with id: 550e8400-...",
+  "path":          "/api/v1/events/550e8400-...",
+  "correlationId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
 }
 ```
 
@@ -259,16 +261,19 @@ Returned by all endpoints on error conditions.
 | `error` | String | HTTP status reason phrase |
 | `message` | String | Human-readable error description |
 | `path` | String | Request URI that triggered the error |
+| `correlationId` | String | Value of the `X-Correlation-Id` header on the request |
 
 ---
 
 ## Database Schema
 
-Schema is managed by **Flyway** (migration: `db/migration/V1__create_events_table.sql`).
+Schema is managed by **Flyway** migrations.
+
+**V1** — creates the `events` table:
 
 ```sql
 CREATE TABLE IF NOT EXISTS events (
-    id          VARCHAR(20)    NOT NULL,
+    id          VARCHAR(36)    NOT NULL,
     title       VARCHAR(150)   NOT NULL,
     description VARCHAR(500)   NOT NULL,
     date        VARCHAR(255)   NOT NULL,
@@ -281,9 +286,15 @@ CREATE TABLE IF NOT EXISTS events (
 );
 ```
 
+**V2** — extends the `id` column to accommodate UUIDs:
+
+```sql
+ALTER TABLE events MODIFY COLUMN id VARCHAR(36) NOT NULL;
+```
+
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | VARCHAR(20) | Business-supplied primary key |
+| `id` | VARCHAR(36) | Server-generated UUID primary key |
 | `title` | VARCHAR(150) | Event name |
 | `description` | VARCHAR(500) | Short summary |
 | `date` | VARCHAR(255) | Date/time as a string |
@@ -373,6 +384,10 @@ management:
 ```
 
 Tests use an **H2 in-memory database** — no external MySQL instance is required. Flyway is disabled in the test profile to allow Hibernate to manage the schema against H2.
+
+The test suite includes:
+- **Unit tests** — `EventServiceTest`, `EventControllerTest`, `EventPersistenceAdapterTest`, `GlobalExceptionHandlerTest` (JUnit 5 + Mockito)
+- **Integration tests** — `EventIntegrationTest` (`@SpringBootTest` + `@AutoConfigureMockMvc` + H2, full CRUD lifecycle)
 
 ---
 

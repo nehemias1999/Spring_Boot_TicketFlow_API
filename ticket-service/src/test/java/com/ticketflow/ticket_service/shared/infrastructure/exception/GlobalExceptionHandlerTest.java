@@ -1,7 +1,6 @@
 package com.ticketflow.ticket_service.shared.infrastructure.exception;
 
 import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCancelledException;
-import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyExistsException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,12 +24,6 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link GlobalExceptionHandler}.
- * <p>
- * The handler is instantiated directly and invoked with a mocked
- * {@link HttpServletRequest}, so no Spring context is required.
- * Each test verifies that the correct HTTP status, error fields,
- * and message are set on the returned {@link ApiErrorResponse}.
- * </p>
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GlobalExceptionHandler — unit tests")
@@ -70,35 +63,6 @@ class GlobalExceptionHandlerTest {
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().status()).isEqualTo(404);
             assertThat(response.getBody().error()).isEqualTo("Not Found");
-            assertThat(response.getBody().message()).contains("TKT-001");
-            assertThat(response.getBody().path()).isEqualTo("/api/v1/tickets/TKT-001");
-            assertThat(response.getBody().timestamp()).isNotNull();
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // handleTicketAlreadyExistsException — TicketAlreadyExistsException → 409
-    // -------------------------------------------------------------------------
-
-    @Nested
-    @DisplayName("handleTicketAlreadyExistsException() — TicketAlreadyExistsException")
-    class HandleTicketAlreadyExistsException {
-
-        @Test
-        @DisplayName("should return 409 with error details when TicketAlreadyExistsException is thrown")
-        void handleTicketAlreadyExistsException_returns409() {
-            // given
-            TicketAlreadyExistsException ex = new TicketAlreadyExistsException("TKT-001");
-
-            // when
-            ResponseEntity<ApiErrorResponse> response =
-                    handler.handleTicketAlreadyExistsException(ex, request);
-
-            // then
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-            assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().status()).isEqualTo(409);
-            assertThat(response.getBody().error()).isEqualTo("Conflict");
             assertThat(response.getBody().message()).contains("TKT-001");
             assertThat(response.getBody().path()).isEqualTo("/api/v1/tickets/TKT-001");
             assertThat(response.getBody().timestamp()).isNotNull();
@@ -148,7 +112,7 @@ class GlobalExceptionHandlerTest {
             // given
             MethodArgumentNotValidException ex = mock(MethodArgumentNotValidException.class);
             BindingResult bindingResult = mock(BindingResult.class);
-            FieldError fieldError = new FieldError("createTicketRequest", "id", "must not be blank");
+            FieldError fieldError = new FieldError("createTicketRequest", "eventId", "must not be blank");
 
             when(ex.getBindingResult()).thenReturn(bindingResult);
             when(bindingResult.getFieldErrors()).thenReturn(List.of(fieldError));
@@ -163,7 +127,7 @@ class GlobalExceptionHandlerTest {
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().status()).isEqualTo(400);
             assertThat(response.getBody().message())
-                    .contains("id")
+                    .contains("eventId")
                     .contains("must not be blank");
         }
 
@@ -173,11 +137,11 @@ class GlobalExceptionHandlerTest {
             // given
             MethodArgumentNotValidException ex = mock(MethodArgumentNotValidException.class);
             BindingResult bindingResult = mock(BindingResult.class);
-            FieldError idError = new FieldError("createTicketRequest", "id", "must not be blank");
             FieldError eventIdError = new FieldError("createTicketRequest", "eventId", "must not be blank");
+            FieldError userIdError = new FieldError("createTicketRequest", "userId", "must not be blank");
 
             when(ex.getBindingResult()).thenReturn(bindingResult);
-            when(bindingResult.getFieldErrors()).thenReturn(List.of(idError, eventIdError));
+            when(bindingResult.getFieldErrors()).thenReturn(List.of(eventIdError, userIdError));
             when(bindingResult.getFieldErrorCount()).thenReturn(2);
 
             // when
@@ -187,8 +151,8 @@ class GlobalExceptionHandlerTest {
             // then
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().message())
-                    .contains("id")
-                    .contains("eventId");
+                    .contains("eventId")
+                    .contains("userId");
         }
     }
 

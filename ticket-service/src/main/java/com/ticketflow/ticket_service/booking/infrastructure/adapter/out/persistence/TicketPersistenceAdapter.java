@@ -67,21 +67,6 @@ public class TicketPersistenceAdapter implements ITicketPersistencePort {
     /**
      * {@inheritDoc}
      * <p>
-     * Delegates directly to the JPA repository's derived existence query,
-     * which checks both the ID and the {@code deleted = false} condition.
-     * </p>
-     */
-    @Override
-    public boolean existsByIdAndDeletedFalse(String id) {
-        log.debug("Checking existence of active ticket entity with id: {}", id);
-        boolean exists = ticketJpaRepository.existsByIdAndDeletedFalse(id);
-        log.debug("Active ticket entity with id '{}' exists: {}", id, exists);
-        return exists;
-    }
-
-    /**
-     * {@inheritDoc}
-     * <p>
      * Builds a {@link Specification} combining the mandatory soft-delete filter with
      * optional eventId, userId, and status predicates, then delegates to the JPA
      * repository's specification executor.

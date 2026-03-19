@@ -84,21 +84,6 @@ public class EventPersistenceAdapter implements IEventPersistencePort {
     /**
      * {@inheritDoc}
      * <p>
-     * Delegates directly to the JPA repository's derived existence query,
-     * which checks both the ID and the {@code deleted = false} condition.
-     * </p>
-     */
-    @Override
-    public boolean existsByIdAndDeletedFalse(String id) {
-        log.debug("Checking existence of active event entity with id: {}", id);
-        boolean exists = eventJpaRepository.existsByIdAndDeletedFalse(id);
-        log.debug("Active event entity with id '{}' exists: {}", id, exists);
-        return exists;
-    }
-
-    /**
-     * {@inheritDoc}
-     * <p>
      * Builds a {@link Specification} combining mandatory soft-delete filter with
      * optional title and location LIKE predicates, then delegates to the JPA
      * repository's specification executor.

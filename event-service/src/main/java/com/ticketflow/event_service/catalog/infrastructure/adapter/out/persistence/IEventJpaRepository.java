@@ -34,12 +34,5 @@ public interface IEventJpaRepository extends JpaRepository<EventEntity, String>,
      */
     Page<EventEntity> findAllByDeletedFalse(Pageable pageable);
 
-    /**
-     * Checks whether an active event entity with the given ID exists.
-     *
-     * @param id the unique business identifier
-     * @return {@code true} if an active entity exists, {@code false} otherwise
-     */
-    boolean existsByIdAndDeletedFalse(String id);
 }
 
