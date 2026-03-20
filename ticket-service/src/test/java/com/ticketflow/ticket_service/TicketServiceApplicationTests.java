@@ -1,8 +1,10 @@
 package com.ticketflow.ticket_service;
 
+import com.ticketflow.ticket_service.booking.domain.port.out.ITicketEventPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 
 /**
  * Integration test that verifies the full Spring application context loads
@@ -17,6 +19,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 @DisplayName("TicketService — application context integration test")
 class TicketServiceApplicationTests {
+
+    @MockBean
+    private ITicketEventPublisher ticketEventPublisher;
+
 
     /**
      * Validates that the Spring application context starts without errors,

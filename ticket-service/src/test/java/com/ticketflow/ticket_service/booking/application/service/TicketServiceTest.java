@@ -8,6 +8,7 @@ import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCance
 import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundException;
 import com.ticketflow.ticket_service.booking.domain.model.Ticket;
 import com.ticketflow.ticket_service.booking.domain.model.TicketStatus;
+import com.ticketflow.ticket_service.booking.domain.port.out.ITicketEventPublisher;
 import com.ticketflow.ticket_service.booking.domain.port.out.ITicketPersistencePort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,6 +28,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
@@ -49,6 +51,9 @@ class TicketServiceTest {
 
     @Mock
     private ITicketApplicationMapper ticketApplicationMapper;
+
+    @Mock
+    private ITicketEventPublisher ticketEventPublisher;
 
     @InjectMocks
     private TicketService ticketService;
@@ -91,7 +96,7 @@ class TicketServiceTest {
     class Create {
 
         @Test
-        @DisplayName("should generate a UUID id, persist, and return TicketResponse")
+        @DisplayName("should generate a UUID id, persist, publish event, and return TicketResponse")
         void create_success() {
             // given
             CreateTicketRequest request = buildCreateRequest();
@@ -101,6 +106,7 @@ class TicketServiceTest {
             when(ticketApplicationMapper.toDomain(request)).thenReturn(domain);
             when(ticketPersistencePort.save(any(Ticket.class))).thenReturn(domain);
             when(ticketApplicationMapper.toResponse(domain)).thenReturn(response);
+            doNothing().when(ticketEventPublisher).publishTicketPurchased(any(), any());
 
             // when
             TicketResponse result = ticketService.create(request);
@@ -108,6 +114,7 @@ class TicketServiceTest {
             // then
             assertThat(result).isEqualTo(response);
             verify(ticketPersistencePort).save(any(Ticket.class));
+            verify(ticketEventPublisher).publishTicketPurchased(anyString(), eq("user-001"));
         }
     }
 

@@ -9,6 +9,7 @@ import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundExce
 import com.ticketflow.ticket_service.booking.domain.model.Ticket;
 import com.ticketflow.ticket_service.booking.domain.model.TicketStatus;
 import com.ticketflow.ticket_service.booking.domain.port.in.ITicketService;
+import com.ticketflow.ticket_service.booking.domain.port.out.ITicketEventPublisher;
 import com.ticketflow.ticket_service.booking.domain.port.out.ITicketPersistencePort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,7 @@ public class TicketService implements ITicketService {
 
     private final ITicketPersistencePort ticketPersistencePort;
     private final ITicketApplicationMapper ticketApplicationMapper;
+    private final ITicketEventPublisher ticketEventPublisher;
 
     /**
      * {@inheritDoc}
@@ -57,6 +59,8 @@ public class TicketService implements ITicketService {
         ticket.setStatus(TicketStatus.CONFIRMED);
 
         Ticket savedTicket = ticketPersistencePort.save(ticket);
+
+        ticketEventPublisher.publishTicketPurchased(savedTicket.getId(), savedTicket.getUserId());
 
         log.info("Ticket created successfully with id: {}", savedTicket.getId());
         return ticketApplicationMapper.toResponse(savedTicket);

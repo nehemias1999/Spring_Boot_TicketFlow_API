@@ -3,11 +3,13 @@ package com.ticketflow.ticket_service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketflow.ticket_service.booking.application.dto.request.CreateTicketRequest;
 import com.ticketflow.ticket_service.booking.application.dto.request.UpdateTicketRequest;
+import com.ticketflow.ticket_service.booking.domain.port.out.ITicketEventPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -37,6 +39,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("Ticket Service — integration tests")
 class TicketIntegrationTest {
 
+    @MockBean
+    private ITicketEventPublisher ticketEventPublisher;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -44,7 +49,7 @@ class TicketIntegrationTest {
     private ObjectMapper objectMapper;
 
     private static CreateTicketRequest buildCreateRequest() {
-        return new CreateTicketRequest("evt-550e8400-e29b-41d4-a716-446655440000", "user-001");
+        return new CreateTicketRequest("550e8400-e29b-41d4-a716-446655440000", "user-001");
     }
 
     @Test
@@ -57,7 +62,7 @@ class TicketIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNotEmpty())
-                .andExpect(jsonPath("$.eventId").value("evt-550e8400-e29b-41d4-a716-446655440000"))
+                .andExpect(jsonPath("$.eventId").value("550e8400-e29b-41d4-a716-446655440000"))
                 .andExpect(jsonPath("$.userId").value("user-001"))
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
                 .andExpect(jsonPath("$.createdAt").isNotEmpty());
@@ -108,7 +113,7 @@ class TicketIntegrationTest {
     @Test
     @DisplayName("should purchase a ticket and list it in the paginated response")
     void createAndGetAll_returnsInPage() throws Exception {
-        CreateTicketRequest request = new CreateTicketRequest("evt-aabbccdd-1234-5678-abcd-000000000001", "user-filter-test");
+        CreateTicketRequest request = new CreateTicketRequest("aabbccdd-1234-5678-abcd-000000000001", "user-filter-test");
 
         mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
