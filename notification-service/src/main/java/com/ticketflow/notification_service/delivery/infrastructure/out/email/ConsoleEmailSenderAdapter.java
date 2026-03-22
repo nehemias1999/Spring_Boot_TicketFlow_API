@@ -1,6 +1,7 @@
 package com.ticketflow.notification_service.delivery.infrastructure.out.email;
 
 import com.ticketflow.notification_service.delivery.application.port.out.EmailSenderPort;
+import com.ticketflow.notification_service.delivery.domain.Notification;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +16,7 @@ import org.springframework.stereotype.Component;
 public class ConsoleEmailSenderAdapter implements EmailSenderPort {
 
     @Override
-    public void sendEmail(String userId, String message) {
-        log.info("[EMAIL] To: {} | Message: {}", userId, message);
+    public void sendEmail(Notification notification) {
+        log.info("[EMAIL] To: {} | Message: {}", notification.userId(), notification.message());
     }
 }

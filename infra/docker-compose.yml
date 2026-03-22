@@ -1,0 +1,28 @@
+services:
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: ticketflow-rabbitmq
+    ports:
+      - "5672:5672"    # AMQP — usado por los microservicios
+      - "15672:15672"  # Management UI — http://localhost:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  # MySQL — omitir si ya tenés MySQL corriendo nativamente en 3306
+  mysql:
+    image: mysql:8.0
+    container_name: ticketflow-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  rabbitmq_data:
+  mysql_data:

@@ -1,5 +1,6 @@
 package com.ticketflow.ticket_service.shared.infrastructure.config;
 
+import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +21,11 @@ public class RabbitMQConfig {
     @Bean
     public TopicExchange ticketflowEventsExchange() {
         return new TopicExchange("ticketflow.events", true, false);
+    }
+
+    @Bean
+    public Queue ticketPurchasedQueue() {
+        return new Queue("ticket.purchased.queue", true);
     }
 
     @Bean

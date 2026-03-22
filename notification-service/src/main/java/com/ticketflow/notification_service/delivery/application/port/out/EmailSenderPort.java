@@ -1,5 +1,7 @@
 package com.ticketflow.notification_service.delivery.application.port.out;
 
+import com.ticketflow.notification_service.delivery.domain.Notification;
+
 /**
  * Outbound port for sending email notifications.
  * <p>
@@ -8,5 +10,5 @@ package com.ticketflow.notification_service.delivery.application.port.out;
  */
 public interface EmailSenderPort {
 
-    void sendEmail(String userId, String message);
+    void sendEmail(Notification notification);
 }

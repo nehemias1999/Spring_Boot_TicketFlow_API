@@ -1,6 +1,7 @@
 package com.ticketflow.notification_service.delivery.application.usecase;
 
 import com.ticketflow.notification_service.delivery.application.port.out.EmailSenderPort;
+import com.ticketflow.notification_service.delivery.domain.Notification;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,11 +31,10 @@ class ProcessNotificationUseCaseTest {
         useCase.execute(ticketId, userId);
 
         // then
-        ArgumentCaptor<String> userCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
-        verify(emailSenderPort).sendEmail(userCaptor.capture(), messageCaptor.capture());
+        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+        verify(emailSenderPort).sendEmail(captor.capture());
 
-        assertThat(userCaptor.getValue()).isEqualTo(userId);
-        assertThat(messageCaptor.getValue()).contains(ticketId);
+        assertThat(captor.getValue().userId()).isEqualTo(userId);
+        assertThat(captor.getValue().message()).contains(ticketId);
     }
 }

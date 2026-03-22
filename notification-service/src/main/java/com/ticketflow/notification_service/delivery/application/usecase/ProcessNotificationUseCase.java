@@ -24,6 +24,6 @@ public class ProcessNotificationUseCase {
         String message = "Your ticket " + ticketId + " has been confirmed";
         Notification notification = new Notification(
                 UUID.randomUUID().toString(), ticketId, userId, message, "SENT");
-        emailSenderPort.sendEmail(notification.userId(), notification.message());
+        emailSenderPort.sendEmail(notification);
     }
 }

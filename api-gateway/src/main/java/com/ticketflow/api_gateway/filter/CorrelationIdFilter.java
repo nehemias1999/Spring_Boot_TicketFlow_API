@@ -16,7 +16,7 @@ import java.util.UUID;
  * Global filter that ensures every request carries an {@code X-Correlation-Id} header.
  * <p>
  * If the incoming request already contains the header, its value is preserved and
- * forwarded downstream. Otherwise a new UUID is generated. The correlation ID is also
+ * forwarded downstream. Otherwise, a new UUID is generated. The correlation ID is also
  * added to the outgoing response so the client can trace the request end-to-end.
  * </p>
  */
