@@ -15,10 +15,11 @@ Microservices-based ticket reservation system built with Java 21 and Spring Boot
 2. [Architecture](#architecture)
 3. [Services](#services)
 4. [Tech Stack](#tech-stack)
-5. [Port Reference](#port-reference)
-6. [Startup Order](#startup-order)
-7. [Running the Project](#running-the-project)
-8. [Running All Tests](#running-all-tests)
+5. [API Conventions](#api-conventions)
+6. [Port Reference](#port-reference)
+7. [Startup Order](#startup-order)
+8. [Running the Project](#running-the-project)
+9. [Running All Tests](#running-all-tests)
 
 ---
 
@@ -142,6 +143,25 @@ Business microservice that manages **ticket purchases and transfers** for the Ti
 | Testing | JUnit 5, Mockito, H2 (in-memory) |
 | Build | Maven |
 | Utils | Lombok |
+
+---
+
+## API Conventions
+
+### Datetime format
+
+All `LocalDateTime` fields (`createdAt`, `updatedAt`, `purchaseDate`) are serialized in the format `yyyy-MM-dd'T'HH:mm:ss` — no milliseconds or nanoseconds:
+
+```
+2026-03-11T10:00:00
+```
+
+This is configured centrally via Jackson settings in the config-server YAML files for each service (`write-dates-as-timestamps: false`, `write-date-timestamps-as-nanoseconds: false`).
+
+### `updatedAt` field
+
+- **On creation (`POST`):** `updatedAt` is returned as `null`. Spring Auditing's `@LastModifiedDate` sets the value in-memory during the INSERT, but the persistence adapter explicitly clears it before returning the response, so the result accurately reflects that no update has occurred yet.
+- **On modification (`PUT` / `PATCH`):** `updatedAt` is populated by `@LastModifiedDate` with the actual update timestamp.
 
 ---
 

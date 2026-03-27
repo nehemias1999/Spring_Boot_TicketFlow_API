@@ -5,6 +5,11 @@ spring:
   cloud:
     discovery:
       enabled: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      write-date-timestamps-as-nanoseconds: false
+    date-format: yyyy-MM-dd'T'HH:mm:ss
   rabbitmq:
     host: localhost
     port: 5672

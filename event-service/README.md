@@ -213,6 +213,8 @@ Soft-deletes an event. The record is marked `deleted = true` and excluded from a
 
 ### `EventResponse`
 
+**After creation (`POST`)** — `updatedAt` is always `null`:
+
 ```json
 {
   "id":          "550e8400-e29b-41d4-a716-446655440000",
@@ -221,6 +223,21 @@ Soft-deletes an event. The record is marked `deleted = true` and excluded from a
   "date":        "2026-08-01 16:00",
   "location":    "Grant Park, Chicago, IL",
   "basePrice":   99.99,
+  "createdAt":   "2026-03-11T10:00:00",
+  "updatedAt":   null
+}
+```
+
+**After update (`PUT`)** — `updatedAt` is populated:
+
+```json
+{
+  "id":          "550e8400-e29b-41d4-a716-446655440000",
+  "title":       "Lollapalooza 2026 — Updated",
+  "description": "Annual music festival in Chicago",
+  "date":        "2026-08-01 16:00",
+  "location":    "Grant Park, Chicago, IL",
+  "basePrice":   119.99,
   "createdAt":   "2026-03-11T10:00:00",
   "updatedAt":   "2026-03-11T12:00:00"
 }
@@ -234,8 +251,8 @@ Soft-deletes an event. The record is marked `deleted = true` and excluded from a
 | `date` | String | Date and time of the event |
 | `location` | String | Venue |
 | `basePrice` | BigDecimal | Base reference price |
-| `createdAt` | LocalDateTime | Creation timestamp |
-| `updatedAt` | LocalDateTime | Last update timestamp (nullable) |
+| `createdAt` | LocalDateTime | Creation timestamp — format `yyyy-MM-dd'T'HH:mm:ss` |
+| `updatedAt` | LocalDateTime | Last update timestamp — `null` on creation, populated after first update |
 
 ---
 
@@ -302,7 +319,35 @@ ALTER TABLE events MODIFY COLUMN id VARCHAR(36) NOT NULL;
 | `base_price` | DECIMAL(12,2) | Reference price |
 | `deleted` | BOOLEAN | Soft-delete flag (default `false`) |
 | `created_at` | DATETIME | Set by JPA auditing on insert |
-| `updated_at` | DATETIME | Set by JPA auditing on update (nullable) |
+| `updated_at` | DATETIME | `NULL` on insert; set by JPA auditing on first update |
+
+---
+
+## API Conventions
+
+### Datetime format
+
+All `LocalDateTime` fields in responses use the format `yyyy-MM-dd'T'HH:mm:ss` (no nanoseconds):
+
+```
+2026-03-11T10:00:00
+```
+
+This is configured centrally in the config-server (`event-service.yml`):
+
+```yaml
+spring:
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      write-date-timestamps-as-nanoseconds: false
+    date-format: yyyy-MM-dd'T'HH:mm:ss
+```
+
+### `updatedAt` field
+
+- **On `POST` (creation):** `updatedAt` is always returned as `null`. The persistence adapter explicitly clears the in-memory value that Spring Auditing sets during the INSERT, so the response accurately reflects that no update has occurred yet.
+- **On `PUT` / `PATCH` (modification):** `updatedAt` is populated by `@LastModifiedDate` (Spring Data JPA Auditing) with the timestamp of the update.
 
 ---
 
