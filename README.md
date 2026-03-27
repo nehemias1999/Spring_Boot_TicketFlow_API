@@ -49,7 +49,22 @@ TicketFlow is an incremental Spring Boot microservices project. Each service is 
              │  port 8081   │  │   port 8082      │
              │ CRUD events  │  │ CRUD tickets     │
              │ MySQL·Flyway │  │ MySQL · Flyway   │
-             └──────────────┘  └──────────────────┘
+             └──────────────┘  └────────┬─────────┘
+                                        │ publishes
+                                        ▼
+                              ┌──────────────────┐
+                              │    RabbitMQ      │
+                              │ ticketflow.events│
+                              │ exchange (topic) │
+                              └────────┬─────────┘
+                                       │ consumes
+                                       ▼
+                          ┌────────────────────────┐
+                          │  notification-service  │
+                          │      port 8083         │
+                          │  email notifications   │
+                          │  (event-driven, AMQP)  │
+                          └────────────────────────┘
 
      ┌──────────────────────────────────────────────┐
      │              discovery-service                │
@@ -117,8 +132,19 @@ Business microservice that manages **ticket purchases and transfers** for the Ti
 - Schema management via Flyway migrations
 - Jakarta Bean Validation on all inputs
 - Swagger UI at `/swagger-ui.html`
+- Publishes `TicketPurchasedMessage` to RabbitMQ on every successful ticket creation
 
 → [ticket-service/README.md](ticket-service/README.md)
+
+---
+
+### notification-service
+Event-driven microservice that delivers **email notifications** when a ticket is purchased. Does not expose HTTP endpoints — all input arrives via RabbitMQ. Responsibilities:
+- Listens to `ticket.purchased.queue` on the `ticketflow.events` exchange
+- Builds a `Notification` from the incoming message
+- Delegates delivery to `EmailSenderPort` (currently logs to console; designed to be replaced by SMTP or external email adapter)
+
+→ [notification-service/README.md](notification-service/README.md)
 
 ---
 
@@ -134,13 +160,14 @@ Business microservice that manages **ticket purchases and transfers** for the Ti
 | Config Management | Spring Cloud Config Server (native profile) |
 | Load Balancing | Spring Cloud LoadBalancer |
 | Resilience | Resilience4j (CircuitBreaker, Retry) |
+| Messaging | RabbitMQ, Spring AMQP |
 | Persistence | Spring Data JPA, Hibernate, MySQL 8 |
 | Migrations | Flyway |
 | Mapping | MapStruct 1.6.3 |
 | Validation | Jakarta Bean Validation |
 | API Docs | springdoc-openapi 2.8.8 (Swagger UI) |
 | Monitoring | Spring Boot Actuator |
-| Testing | JUnit 5, Mockito, H2 (in-memory) |
+| Testing | JUnit 5, Mockito, H2 (in-memory), spring-rabbit-test |
 | Build | Maven |
 | Utils | Lombok |
 
@@ -174,6 +201,8 @@ This is configured centrally via Jackson settings in the config-server YAML file
 | api-gateway | `8080` |
 | event-service | `8081` |
 | ticket-service | `8082` |
+| notification-service | `8083` |
+| RabbitMQ | `5672` (AMQP) · `15672` (management UI) |
 
 ---
 
@@ -182,11 +211,13 @@ This is configured centrally via Jackson settings in the config-server YAML file
 Services must be started in the following order due to registration and configuration dependencies:
 
 ```
-1. discovery-service   ← Eureka must be up before anyone registers
-2. config-server       ← must be up before clients fetch their config
-3. event-service       ← registers with Eureka, fetches config
-   ticket-service      ← registers with Eureka, fetches config (can start in parallel with event-service)
-4. api-gateway         ← registers with Eureka, fetches routes from config
+1. discovery-service      ← Eureka must be up before anyone registers
+2. config-server          ← must be up before clients fetch their config
+3. RabbitMQ               ← must be up before notification-service and ticket-service connect
+4. event-service          ← registers with Eureka, fetches config
+   ticket-service         ← registers with Eureka, fetches config (parallel with event-service)
+   notification-service   ← registers with Eureka, connects to RabbitMQ (parallel with event/ticket)
+5. api-gateway            ← registers with Eureka, fetches routes from config
 ```
 
 > Starting a service before its dependencies will not cause a fatal failure — Spring Cloud clients retry registration and config fetch in the background — but starting in order avoids noise in the logs.
@@ -200,6 +231,7 @@ Services must be started in the following order due to registration and configur
 - Java 21
 - Maven 3.9+
 - MySQL 8 running locally on port `3306` (required by event-service and ticket-service)
+- RabbitMQ running locally on port `5672` (required by ticket-service and notification-service)
 
 ### Steps
 
@@ -220,7 +252,10 @@ cd event-service && ./mvnw spring-boot:run
 # 5. Start ticket-service (new terminal)
 cd ticket-service && ./mvnw spring-boot:run
 
-# 6. Start api-gateway (new terminal)
+# 6. Start notification-service (new terminal)
+cd notification-service && ./mvnw spring-boot:run
+
+# 7. Start api-gateway (new terminal)
 cd api-gateway && ./mvnw spring-boot:run
 ```
 
@@ -246,9 +281,10 @@ Each service has an isolated test configuration (H2 / no Eureka / no config-serv
 
 ```bash
 # From each service directory
-cd event-service  && ./mvnw test
-cd ticket-service && ./mvnw test
-cd api-gateway    && ./mvnw test
-cd config-server  && ./mvnw test
-cd discovery-service && ./mvnw test
+cd event-service         && ./mvnw test
+cd ticket-service        && ./mvnw test
+cd notification-service  && ./mvnw test
+cd api-gateway           && ./mvnw test
+cd config-server         && ./mvnw test
+cd discovery-service     && ./mvnw test
 ```
