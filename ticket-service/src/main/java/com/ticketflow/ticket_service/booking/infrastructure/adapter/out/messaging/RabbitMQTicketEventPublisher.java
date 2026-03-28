@@ -1,5 +1,6 @@
 package com.ticketflow.ticket_service.booking.infrastructure.adapter.out.messaging;
 
+import com.ticketflow.ticket_service.booking.application.event.TicketCancelledEvent;
 import com.ticketflow.ticket_service.booking.application.event.TicketPurchasedEvent;
 import com.ticketflow.ticket_service.booking.domain.port.out.ITicketEventPublisher;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ public class RabbitMQTicketEventPublisher implements ITicketEventPublisher {
 
     static final String EXCHANGE = "ticketflow.events";
     static final String ROUTING_KEY = "ticket.purchased";
+    static final String ROUTING_KEY_CANCELLED = "ticket.cancelled";
 
     private final RabbitTemplate rabbitTemplate;
 
@@ -29,5 +31,12 @@ public class RabbitMQTicketEventPublisher implements ITicketEventPublisher {
         TicketPurchasedEvent event = new TicketPurchasedEvent(ticketId, userId, userEmail);
         log.info("Publishing TicketPurchasedEvent — ticketId: {}, userId: {}", ticketId, userId);
         rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY, event);
+    }
+
+    @Override
+    public void publishTicketCancelled(String ticketId, String userId, String userEmail) {
+        TicketCancelledEvent event = new TicketCancelledEvent(ticketId, userId, userEmail);
+        log.info("Publishing TicketCancelledEvent — ticketId: {}, userId: {}", ticketId, userId);
+        rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY_CANCELLED, event);
     }
 }

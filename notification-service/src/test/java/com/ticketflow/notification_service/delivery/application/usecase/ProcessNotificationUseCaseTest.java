@@ -26,15 +26,17 @@ class ProcessNotificationUseCaseTest {
         ProcessNotificationUseCase useCase = new ProcessNotificationUseCase(emailSenderPort);
         String ticketId = "ticket-abc";
         String userId = "user-xyz";
+        String userEmail = "user@test.com";
 
         // when
-        useCase.execute(ticketId, userId);
+        useCase.execute(ticketId, userId, userEmail);
 
         // then
         ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
         verify(emailSenderPort).sendEmail(captor.capture());
 
         assertThat(captor.getValue().userId()).isEqualTo(userId);
+        assertThat(captor.getValue().recipientEmail()).isEqualTo(userEmail);
         assertThat(captor.getValue().message()).contains(ticketId);
     }
 }

@@ -121,7 +121,7 @@ public class TicketService implements ITicketService {
      * </p>
      */
     @Override
-    public TicketResponse cancel(String id, String authenticatedUserId) {
+    public TicketResponse cancel(String id, String authenticatedUserId, String userEmail) {
         log.info("Cancelling ticket with id: {}", id);
 
         Ticket ticket = ticketPersistencePort.findByIdAndDeletedFalse(id)
@@ -142,6 +142,8 @@ public class TicketService implements ITicketService {
 
         ticket.setStatus(TicketStatus.CANCELLED);
         Ticket savedTicket = ticketPersistencePort.update(ticket);
+
+        ticketEventPublisher.publishTicketCancelled(savedTicket.getId(), savedTicket.getUserId(), userEmail);
 
         log.info("Ticket cancelled successfully with id: {}", id);
         return ticketApplicationMapper.toResponse(savedTicket);

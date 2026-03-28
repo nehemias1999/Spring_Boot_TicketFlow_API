@@ -53,9 +53,10 @@ public interface ITicketService {
      *
      * @param id                  the ticket identifier
      * @param authenticatedUserId the ID of the authenticated user (from X-User-Id header)
+     * @param userEmail           the email of the authenticated user (from X-User-Email header)
      * @return the cancelled ticket response
      */
-    TicketResponse cancel(String id, String authenticatedUserId);
+    TicketResponse cancel(String id, String authenticatedUserId, String userEmail);
 
     /**
      * Soft-deletes a ticket by its unique ID.

@@ -14,7 +14,7 @@ class ConsoleEmailSenderAdapterTest {
     void sendEmail_doesNotThrow() {
         ConsoleEmailSenderAdapter adapter = new ConsoleEmailSenderAdapter();
         Notification notification = new Notification("notif-001", "ticket-123", "user-001",
-                "Your ticket ticket-123 has been confirmed", "SENT");
+                "user@test.com", "Your ticket ticket-123 has been confirmed", "SENT");
         assertThatCode(() -> adapter.sendEmail(notification))
                 .doesNotThrowAnyException();
     }

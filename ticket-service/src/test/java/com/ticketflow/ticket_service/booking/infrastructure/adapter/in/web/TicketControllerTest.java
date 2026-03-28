@@ -245,10 +245,11 @@ class TicketControllerTest {
         @DisplayName("should return 200 OK with CANCELLED status on success")
         void cancel_success_returns200() throws Exception {
             TicketResponse response = buildResponse("TKT-001", TicketStatus.CANCELLED);
-            when(ticketService.cancel(eq("TKT-001"), anyString())).thenReturn(response);
+            when(ticketService.cancel(eq("TKT-001"), anyString(), anyString())).thenReturn(response);
 
             mockMvc.perform(patch("/api/v1/tickets/TKT-001/cancel")
-                            .header("X-User-Id", USER_ID))
+                            .header("X-User-Id", USER_ID)
+                            .header("X-User-Email", USER_EMAIL))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value("TKT-001"))
                     .andExpect(jsonPath("$.status").value("CANCELLED"));
@@ -257,11 +258,12 @@ class TicketControllerTest {
         @Test
         @DisplayName("should return 404 Not Found when ticket to cancel does not exist")
         void cancel_notFound_returns404() throws Exception {
-            when(ticketService.cancel(eq("TKT-999"), anyString()))
+            when(ticketService.cancel(eq("TKT-999"), anyString(), anyString()))
                     .thenThrow(new TicketNotFoundException("TKT-999"));
 
             mockMvc.perform(patch("/api/v1/tickets/TKT-999/cancel")
-                            .header("X-User-Id", USER_ID))
+                            .header("X-User-Id", USER_ID)
+                            .header("X-User-Email", USER_EMAIL))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.status").value(404));
         }
@@ -269,11 +271,12 @@ class TicketControllerTest {
         @Test
         @DisplayName("should return 409 Conflict when ticket is already cancelled")
         void cancel_alreadyCancelled_returns409() throws Exception {
-            when(ticketService.cancel(eq("TKT-001"), anyString()))
+            when(ticketService.cancel(eq("TKT-001"), anyString(), anyString()))
                     .thenThrow(new TicketAlreadyCancelledException("TKT-001"));
 
             mockMvc.perform(patch("/api/v1/tickets/TKT-001/cancel")
-                            .header("X-User-Id", USER_ID))
+                            .header("X-User-Id", USER_ID)
+                            .header("X-User-Email", USER_EMAIL))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.status").value(409))
                     .andExpect(jsonPath("$.message").exists());

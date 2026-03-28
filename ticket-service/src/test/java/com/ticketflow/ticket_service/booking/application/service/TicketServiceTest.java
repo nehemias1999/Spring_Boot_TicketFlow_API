@@ -244,7 +244,7 @@ class TicketServiceTest {
     class Cancel {
 
         @Test
-        @DisplayName("should cancel ticket and return TicketResponse with CANCELLED status")
+        @DisplayName("should cancel ticket, publish event and return TicketResponse with CANCELLED status")
         void cancel_success() {
             // given
             Ticket existing = buildTicket("TKT-001", TicketStatus.CONFIRMED);
@@ -257,12 +257,13 @@ class TicketServiceTest {
             when(ticketApplicationMapper.toResponse(cancelled)).thenReturn(response);
 
             // when
-            TicketResponse result = ticketService.cancel("TKT-001", USER_ID);
+            TicketResponse result = ticketService.cancel("TKT-001", USER_ID, USER_EMAIL);
 
             // then
             assertThat(result.status()).isEqualTo(TicketStatus.CANCELLED);
             assertThat(existing.getStatus()).isEqualTo(TicketStatus.CANCELLED);
             verify(ticketPersistencePort).update(existing);
+            verify(ticketEventPublisher).publishTicketCancelled(cancelled.getId(), cancelled.getUserId(), USER_EMAIL);
         }
 
         @Test
@@ -273,7 +274,7 @@ class TicketServiceTest {
                     .thenReturn(Optional.empty());
 
             // when / then
-            assertThatThrownBy(() -> ticketService.cancel("TKT-999", USER_ID))
+            assertThatThrownBy(() -> ticketService.cancel("TKT-999", USER_ID, USER_EMAIL))
                     .isInstanceOf(TicketNotFoundException.class)
                     .hasMessageContaining("TKT-999");
 
@@ -289,7 +290,7 @@ class TicketServiceTest {
                     .thenReturn(Optional.of(alreadyCancelled));
 
             // when / then
-            assertThatThrownBy(() -> ticketService.cancel("TKT-001", USER_ID))
+            assertThatThrownBy(() -> ticketService.cancel("TKT-001", USER_ID, USER_EMAIL))
                     .isInstanceOf(TicketAlreadyCancelledException.class)
                     .hasMessageContaining("TKT-001");
 

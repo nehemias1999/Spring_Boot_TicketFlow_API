@@ -24,12 +24,12 @@ class TicketPurchasedEventListenerTest {
     @DisplayName("should delegate to ProcessNotificationUseCase with correct ticketId and userId")
     void onTicketPurchased_delegatesToUseCase() {
         // given
-        TicketPurchasedMessage message = new TicketPurchasedMessage("ticket-001", "user-001");
+        TicketPurchasedMessage message = new TicketPurchasedMessage("ticket-001", "user-001", "user@test.com");
 
         // when
         listener.onTicketPurchased(message);
 
         // then
-        verify(processNotificationUseCase).execute("ticket-001", "user-001");
+        verify(processNotificationUseCase).execute("ticket-001", "user-001", "user@test.com");
     }
 }

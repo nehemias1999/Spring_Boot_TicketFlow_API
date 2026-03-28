@@ -113,9 +113,10 @@ public class TicketController {
     @PatchMapping("/{id}/cancel")
     public ResponseEntity<TicketResponse> cancel(
             @PathVariable String id,
-            @RequestHeader("X-User-Id") String userId) {
+            @RequestHeader("X-User-Id") String userId,
+            @RequestHeader("X-User-Email") String userEmail) {
         log.info("PATCH /api/v1/tickets/{}/cancel - Request received to cancel ticket", id);
-        TicketResponse response = ticketServicePort.cancel(id, userId);
+        TicketResponse response = ticketServicePort.cancel(id, userId, userEmail);
         log.info("PATCH /api/v1/tickets/{}/cancel - Ticket cancelled successfully", id);
         return ResponseEntity.ok(response);
     }

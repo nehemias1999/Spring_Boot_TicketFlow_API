@@ -2,6 +2,7 @@ package com.ticketflow.notification_service.delivery.infrastructure.config;
 
 import com.ticketflow.notification_service.delivery.application.port.out.EmailSenderPort;
 import com.ticketflow.notification_service.delivery.application.usecase.ProcessNotificationUseCase;
+import com.ticketflow.notification_service.delivery.application.usecase.ProcessTicketCancelledNotificationUseCase;
 import com.ticketflow.notification_service.delivery.application.usecase.ProcessWelcomeNotificationUseCase;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
@@ -44,6 +45,18 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public Queue ticketCancelledQueue() {
+        return new Queue("ticket.cancelled.queue", true);
+    }
+
+    @Bean
+    public Binding ticketCancelledBinding(Queue ticketCancelledQueue, TopicExchange ticketflowEventsExchange) {
+        return BindingBuilder.bind(ticketCancelledQueue)
+                .to(ticketflowEventsExchange)
+                .with("ticket.cancelled");
+    }
+
+    @Bean
     public Queue userRegisteredQueue() {
         return new Queue("user.registered.queue", true);
     }
@@ -77,5 +90,10 @@ public class RabbitMQConfig {
     @Bean
     public ProcessWelcomeNotificationUseCase processWelcomeNotificationUseCase(EmailSenderPort emailSenderPort) {
         return new ProcessWelcomeNotificationUseCase(emailSenderPort);
+    }
+
+    @Bean
+    public ProcessTicketCancelledNotificationUseCase processTicketCancelledNotificationUseCase(EmailSenderPort emailSenderPort) {
+        return new ProcessTicketCancelledNotificationUseCase(emailSenderPort);
     }
 }

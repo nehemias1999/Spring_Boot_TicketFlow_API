@@ -126,7 +126,8 @@ class TicketIntegrationTest {
 
         // Cancel
         mockMvc.perform(patch("/api/v1/tickets/{id}/cancel", id)
-                        .header("X-User-Id", USER_ID))
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Email", USER_EMAIL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
@@ -148,12 +149,14 @@ class TicketIntegrationTest {
 
         // First cancel
         mockMvc.perform(patch("/api/v1/tickets/{id}/cancel", id)
-                        .header("X-User-Id", USER_ID))
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Email", USER_EMAIL))
                 .andExpect(status().isOk());
 
         // Second cancel — should conflict
         mockMvc.perform(patch("/api/v1/tickets/{id}/cancel", id)
-                        .header("X-User-Id", USER_ID))
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Email", USER_EMAIL))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409));
     }

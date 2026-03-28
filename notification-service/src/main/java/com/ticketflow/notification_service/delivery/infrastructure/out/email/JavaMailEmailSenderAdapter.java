@@ -31,9 +31,14 @@ public class JavaMailEmailSenderAdapter implements EmailSenderPort {
     public void sendEmail(Notification notification) {
         log.info("Sending email to: {} for ticketId: {}", notification.recipientEmail(), notification.ticketId());
 
-        String subject = notification.ticketId() == null
-                ? "TicketFlow — Welcome to TicketFlow!"
-                : "TicketFlow — Your ticket has been confirmed";
+        String subject;
+        if (notification.ticketId() == null) {
+            subject = "TicketFlow — Welcome to TicketFlow!";
+        } else if (notification.message().contains("cancelled")) {
+            subject = "TicketFlow — Your ticket has been cancelled";
+        } else {
+            subject = "TicketFlow — Your ticket has been confirmed";
+        }
 
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(from);

@@ -1,5 +1,6 @@
 package com.ticketflow.ticket_service.booking.infrastructure.adapter.out.messaging;
 
+import com.ticketflow.ticket_service.booking.application.event.TicketCancelledEvent;
 import com.ticketflow.ticket_service.booking.application.event.TicketPurchasedEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,13 +30,14 @@ class RabbitMQTicketEventPublisherTest {
         // given
         String ticketId = "ticket-123";
         String userId = "user-456";
+        String userEmail = "user@test.com";
 
         ArgumentCaptor<String> exchangeCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> routingKeyCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
 
         // when
-        publisher.publishTicketPurchased(ticketId, userId);
+        publisher.publishTicketPurchased(ticketId, userId, userEmail);
 
         // then
         verify(rabbitTemplate).convertAndSend(
@@ -50,5 +52,37 @@ class RabbitMQTicketEventPublisherTest {
         TicketPurchasedEvent event = (TicketPurchasedEvent) payloadCaptor.getValue();
         assertThat(event.ticketId()).isEqualTo(ticketId);
         assertThat(event.userId()).isEqualTo(userId);
+        assertThat(event.userEmail()).isEqualTo(userEmail);
+    }
+
+    @Test
+    @DisplayName("should send cancelled event to correct exchange and routing key with correct payload")
+    void publishTicketCancelled_sendsCorrectMessage() {
+        // given
+        String ticketId = "ticket-123";
+        String userId = "user-456";
+        String userEmail = "user@test.com";
+
+        ArgumentCaptor<String> exchangeCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> routingKeyCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+
+        // when
+        publisher.publishTicketCancelled(ticketId, userId, userEmail);
+
+        // then
+        verify(rabbitTemplate).convertAndSend(
+                exchangeCaptor.capture(),
+                routingKeyCaptor.capture(),
+                payloadCaptor.capture()
+        );
+
+        assertThat(exchangeCaptor.getValue()).isEqualTo(RabbitMQTicketEventPublisher.EXCHANGE);
+        assertThat(routingKeyCaptor.getValue()).isEqualTo(RabbitMQTicketEventPublisher.ROUTING_KEY_CANCELLED);
+
+        TicketCancelledEvent event = (TicketCancelledEvent) payloadCaptor.getValue();
+        assertThat(event.ticketId()).isEqualTo(ticketId);
+        assertThat(event.userId()).isEqualTo(userId);
+        assertThat(event.userEmail()).isEqualTo(userEmail);
     }
 }
