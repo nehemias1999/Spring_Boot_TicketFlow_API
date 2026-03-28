@@ -1,7 +1,6 @@
 package com.ticketflow.ticket_service.booking.application.service;
 
 import com.ticketflow.ticket_service.booking.application.dto.request.CreateTicketRequest;
-import com.ticketflow.ticket_service.booking.application.dto.request.UpdateTicketRequest;
 import com.ticketflow.ticket_service.booking.application.dto.response.TicketResponse;
 import com.ticketflow.ticket_service.booking.application.mapper.ITicketApplicationMapper;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCancelledException;
@@ -85,10 +84,6 @@ class TicketServiceTest {
 
     private static CreateTicketRequest buildCreateRequest() {
         return new CreateTicketRequest("EVT-001");
-    }
-
-    private static UpdateTicketRequest buildUpdateRequest() {
-        return new UpdateTicketRequest("user-002");
     }
 
     // -------------------------------------------------------------------------
@@ -237,54 +232,6 @@ class TicketServiceTest {
             // then
             assertThat(result.getContent()).containsExactly(response);
             verify(ticketPersistencePort).findAllByFilters("EVT-001", USER_ID, "CONFIRMED", pageable);
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // update()
-    // -------------------------------------------------------------------------
-
-    @Nested
-    @DisplayName("update()")
-    class Update {
-
-        @Test
-        @DisplayName("should update and return TicketResponse when ticket is found and owned by the authenticated user")
-        void update_success() {
-            // given
-            UpdateTicketRequest request = buildUpdateRequest();
-            Ticket existing = buildTicket("TKT-001", TicketStatus.CONFIRMED);
-            TicketResponse response = buildResponse("TKT-001", TicketStatus.CONFIRMED);
-
-            when(ticketPersistencePort.findByIdAndDeletedFalse("TKT-001"))
-                    .thenReturn(Optional.of(existing));
-            doNothing().when(ticketApplicationMapper).updateDomainFromRequest(eq(request), eq(existing));
-            when(ticketPersistencePort.update(existing)).thenReturn(existing);
-            when(ticketApplicationMapper.toResponse(existing)).thenReturn(response);
-
-            // when
-            TicketResponse result = ticketService.update("TKT-001", request, USER_ID);
-
-            // then
-            assertThat(result).isEqualTo(response);
-            verify(ticketApplicationMapper).updateDomainFromRequest(request, existing);
-            verify(ticketPersistencePort).update(existing);
-        }
-
-        @Test
-        @DisplayName("should throw TicketNotFoundException when ticket to update is not found")
-        void update_notFound_throwsException() {
-            // given
-            UpdateTicketRequest request = buildUpdateRequest();
-            when(ticketPersistencePort.findByIdAndDeletedFalse("TKT-999"))
-                    .thenReturn(Optional.empty());
-
-            // when / then
-            assertThatThrownBy(() -> ticketService.update("TKT-999", request, USER_ID))
-                    .isInstanceOf(TicketNotFoundException.class)
-                    .hasMessageContaining("TKT-999");
-
-            verify(ticketPersistencePort, never()).update(any());
         }
     }
 

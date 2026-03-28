@@ -1,12 +1,10 @@
 package com.ticketflow.ticket_service.booking.application.mapper;
 
 import com.ticketflow.ticket_service.booking.application.dto.request.CreateTicketRequest;
-import com.ticketflow.ticket_service.booking.application.dto.request.UpdateTicketRequest;
 import com.ticketflow.ticket_service.booking.application.dto.response.TicketResponse;
 import com.ticketflow.ticket_service.booking.domain.model.Ticket;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
 
 /**
  * MapStruct mapper for converting between application-layer DTOs and the domain model.
@@ -48,20 +46,4 @@ public interface ITicketApplicationMapper {
      */
     TicketResponse toResponse(Ticket ticket);
 
-    /**
-     * Applies the fields from an {@link UpdateTicketRequest} onto an existing
-     * {@link Ticket} domain object. Only maps {@code userId}; all other fields
-     * are preserved.
-     *
-     * @param request the update request DTO with the new userId
-     * @param ticket  the existing ticket domain object to update in place
-     */
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "eventId", ignore = true)
-    @Mapping(target = "purchaseDate", ignore = true)
-    @Mapping(target = "status", ignore = true)
-    @Mapping(target = "deleted", ignore = true)
-    @Mapping(target = "createdAt", ignore = true)
-    @Mapping(target = "updatedAt", ignore = true)
-    void updateDomainFromRequest(UpdateTicketRequest request, @MappingTarget Ticket ticket);
 }

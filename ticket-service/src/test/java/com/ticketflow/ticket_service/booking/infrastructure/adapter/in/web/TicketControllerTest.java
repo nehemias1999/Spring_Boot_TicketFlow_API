@@ -2,7 +2,6 @@ package com.ticketflow.ticket_service.booking.infrastructure.adapter.in.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketflow.ticket_service.booking.application.dto.request.CreateTicketRequest;
-import com.ticketflow.ticket_service.booking.application.dto.request.UpdateTicketRequest;
 import com.ticketflow.ticket_service.booking.application.dto.response.TicketResponse;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCancelledException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundException;
@@ -73,10 +72,6 @@ class TicketControllerTest {
 
     private static CreateTicketRequest buildCreateRequest() {
         return new CreateTicketRequest("EVT-001");
-    }
-
-    private static UpdateTicketRequest buildUpdateRequest() {
-        return new UpdateTicketRequest("user-002");
     }
 
     // -------------------------------------------------------------------------
@@ -235,67 +230,6 @@ class TicketControllerTest {
                             .param("status", "CONFIRMED"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content[0].id").value("TKT-001"));
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // PUT /api/v1/tickets/{id}
-    // -------------------------------------------------------------------------
-
-    @Nested
-    @DisplayName("PUT /api/v1/tickets/{id}")
-    class Update {
-
-        @Test
-        @DisplayName("should return 200 OK with updated TicketResponse on success")
-        void update_success_returns200() throws Exception {
-            UpdateTicketRequest request = buildUpdateRequest();
-            TicketResponse response = new TicketResponse(
-                    "TKT-001", "EVT-001", "user-002",
-                    LocalDateTime.now(), TicketStatus.CONFIRMED, LocalDateTime.now(), LocalDateTime.now());
-
-            when(ticketService.update(eq("TKT-001"), any(), anyString())).thenReturn(response);
-
-            mockMvc.perform(put("/api/v1/tickets/TKT-001")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .header("X-User-Id", USER_ID)
-                            .content(objectMapper.writeValueAsString(request)))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.id").value("TKT-001"))
-                    .andExpect(jsonPath("$.userId").value("user-002"));
-        }
-
-        @Test
-        @DisplayName("should return 404 Not Found when ticket to update does not exist")
-        void update_notFound_returns404() throws Exception {
-            UpdateTicketRequest request = buildUpdateRequest();
-
-            when(ticketService.update(eq("TKT-999"), any(), anyString()))
-                    .thenThrow(new TicketNotFoundException("TKT-999"));
-
-            mockMvc.perform(put("/api/v1/tickets/TKT-999")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .header("X-User-Id", USER_ID)
-                            .content(objectMapper.writeValueAsString(request)))
-                    .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.status").value(404));
-        }
-
-        @Test
-        @DisplayName("should return 400 Bad Request when update request body fails validation")
-        void update_validationError_returns400() throws Exception {
-            String invalidBody = """
-                    {
-                      "userId": ""
-                    }
-                    """;
-
-            mockMvc.perform(put("/api/v1/tickets/TKT-001")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .header("X-User-Id", USER_ID)
-                            .content(invalidBody))
-                    .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.status").value(400));
         }
     }
 

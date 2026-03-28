@@ -1,7 +1,6 @@
 package com.ticketflow.ticket_service.booking.domain.port.in;
 
 import com.ticketflow.ticket_service.booking.application.dto.request.CreateTicketRequest;
-import com.ticketflow.ticket_service.booking.application.dto.request.UpdateTicketRequest;
 import com.ticketflow.ticket_service.booking.application.dto.response.TicketResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -47,17 +46,6 @@ public interface ITicketService {
      * @return a page of ticket responses
      */
     Page<TicketResponse> getAll(String eventId, String status, Pageable pageable, String authenticatedUserId);
-
-    /**
-     * Transfers a ticket to another user (updates userId).
-     * The authenticated user must be the current owner of the ticket.
-     *
-     * @param id                  the ticket identifier
-     * @param request             the update request containing the new userId
-     * @param authenticatedUserId the ID of the authenticated user (from X-User-Id header)
-     * @return the updated ticket response
-     */
-    TicketResponse update(String id, UpdateTicketRequest request, String authenticatedUserId);
 
     /**
      * Cancels an active ticket.

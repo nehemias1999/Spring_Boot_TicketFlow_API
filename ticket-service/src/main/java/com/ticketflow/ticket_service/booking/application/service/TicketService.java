@@ -1,7 +1,6 @@
 package com.ticketflow.ticket_service.booking.application.service;
 
 import com.ticketflow.ticket_service.booking.application.dto.request.CreateTicketRequest;
-import com.ticketflow.ticket_service.booking.application.dto.request.UpdateTicketRequest;
 import com.ticketflow.ticket_service.booking.application.dto.response.TicketResponse;
 import com.ticketflow.ticket_service.booking.application.mapper.ITicketApplicationMapper;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCancelledException;
@@ -112,36 +111,6 @@ public class TicketService implements ITicketService {
 
         log.info("Retrieved {} tickets out of {} total", result.getNumberOfElements(), result.getTotalElements());
         return result;
-    }
-
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Loads the existing ticket, applies the userId update via the application mapper,
-     * and persists the changes. Throws {@link TicketNotFoundException} if the ticket
-     * does not exist or has been soft-deleted.
-     * </p>
-     */
-    @Override
-    public TicketResponse update(String id, UpdateTicketRequest request, String authenticatedUserId) {
-        log.info("Updating ticket with id: {}", id);
-
-        Ticket existingTicket = ticketPersistencePort.findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> {
-                    log.warn("Ticket update failed - ticket with id '{}' not found", id);
-                    return new TicketNotFoundException(id);
-                });
-
-        if (!existingTicket.getUserId().equals(authenticatedUserId)) {
-            log.warn("Ticket update forbidden - userId '{}' does not own ticket '{}'", authenticatedUserId, id);
-            throw new TicketOwnershipException(id);
-        }
-
-        ticketApplicationMapper.updateDomainFromRequest(request, existingTicket);
-        Ticket savedTicket = ticketPersistencePort.update(existingTicket);
-
-        log.info("Ticket updated successfully with id: {}", savedTicket.getId());
-        return ticketApplicationMapper.toResponse(savedTicket);
     }
 
     /**

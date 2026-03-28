@@ -2,7 +2,6 @@ package com.ticketflow.ticket_service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketflow.ticket_service.booking.application.dto.request.CreateTicketRequest;
-import com.ticketflow.ticket_service.booking.application.dto.request.UpdateTicketRequest;
 import com.ticketflow.ticket_service.booking.domain.port.out.ITicketEventPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,7 +19,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -93,32 +91,6 @@ class TicketIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.userId").value(USER_ID));
-    }
-
-    @Test
-    @DisplayName("should purchase a ticket, transfer it, and return the updated userId")
-    void createAndUpdate_success() throws Exception {
-        // Purchase
-        MvcResult createResult = mockMvc.perform(post("/api/v1/tickets")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .header("X-User-Id", USER_ID)
-                        .header("X-User-Email", USER_EMAIL)
-                        .content(objectMapper.writeValueAsString(buildCreateRequest())))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        String id = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText();
-
-        // Transfer
-        UpdateTicketRequest updateRequest = new UpdateTicketRequest("user-002");
-
-        mockMvc.perform(put("/api/v1/tickets/{id}", id)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .header("X-User-Id", USER_ID)
-                        .content(objectMapper.writeValueAsString(updateRequest)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id))
-                .andExpect(jsonPath("$.userId").value("user-002"));
     }
 
     @Test
