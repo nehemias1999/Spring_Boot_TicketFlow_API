@@ -76,7 +76,7 @@ public class TicketService implements ITicketService {
      */
     @Override
     @Transactional(readOnly = true)
-    public TicketResponse getById(String id) {
+    public TicketResponse getById(String id, String authenticatedUserId) {
         log.info("Retrieving ticket with id: {}", id);
 
         Ticket ticket = ticketPersistencePort.findByIdAndDeletedFalse(id)
@@ -84,6 +84,11 @@ public class TicketService implements ITicketService {
                     log.warn("Ticket retrieval failed - ticket with id '{}' not found", id);
                     return new TicketNotFoundException(id);
                 });
+
+        if (!ticket.getUserId().equals(authenticatedUserId)) {
+            log.warn("Ticket retrieval forbidden - userId '{}' does not own ticket '{}'", authenticatedUserId, id);
+            throw new TicketOwnershipException(id);
+        }
 
         log.info("Ticket retrieved successfully with id: {}", id);
         return ticketApplicationMapper.toResponse(ticket);
@@ -98,11 +103,11 @@ public class TicketService implements ITicketService {
      */
     @Override
     @Transactional(readOnly = true)
-    public Page<TicketResponse> getAll(String eventId, String userId, String status, Pageable pageable) {
-        log.info("Retrieving all tickets - eventId: {}, userId: {}, status: {}, page: {}, size: {}",
-                eventId, userId, status, pageable.getPageNumber(), pageable.getPageSize());
+    public Page<TicketResponse> getAll(String eventId, String status, Pageable pageable, String authenticatedUserId) {
+        log.info("Retrieving tickets for userId: {} - eventId: {}, status: {}, page: {}, size: {}",
+                authenticatedUserId, eventId, status, pageable.getPageNumber(), pageable.getPageSize());
 
-        Page<TicketResponse> result = ticketPersistencePort.findAllByFilters(eventId, userId, status, pageable)
+        Page<TicketResponse> result = ticketPersistencePort.findAllByFilters(eventId, authenticatedUserId, status, pageable)
                 .map(ticketApplicationMapper::toResponse);
 
         log.info("Retrieved {} tickets out of {} total", result.getNumberOfElements(), result.getTotalElements());

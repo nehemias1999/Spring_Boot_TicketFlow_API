@@ -75,9 +75,11 @@ public class TicketController {
             @ApiResponse(responseCode = "404", description = "Ticket not found")
     })
     @GetMapping("/{id}")
-    public ResponseEntity<TicketResponse> getById(@PathVariable String id) {
+    public ResponseEntity<TicketResponse> getById(
+            @PathVariable String id,
+            @RequestHeader("X-User-Id") String userId) {
         log.info("GET /api/v1/tickets/{} - Request received to retrieve ticket", id);
-        TicketResponse response = ticketServicePort.getById(id);
+        TicketResponse response = ticketServicePort.getById(id, userId);
         log.info("GET /api/v1/tickets/{} - Ticket retrieved successfully", id);
         return ResponseEntity.ok(response);
     }
@@ -89,16 +91,16 @@ public class TicketController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String eventId,
-            @RequestParam(required = false) String userId,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortDir) {
+            @RequestParam(defaultValue = "desc") String sortDir,
+            @RequestHeader("X-User-Id") String userId) {
         size = Math.min(size, MAX_PAGE_SIZE);
-        log.info("GET /api/v1/tickets - Request received - page: {}, size: {}, eventId: {}, userId: {}, status: {}, sortBy: {}, sortDir: {}",
-                page, size, eventId, userId, status, sortBy, sortDir);
+        log.info("GET /api/v1/tickets - Request received - page: {}, size: {}, eventId: {}, status: {}, sortBy: {}, sortDir: {}",
+                page, size, eventId, status, sortBy, sortDir);
         Sort sort = "asc".equalsIgnoreCase(sortDir) ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
-        Page<TicketResponse> response = ticketServicePort.getAll(eventId, userId, status, pageable);
+        Page<TicketResponse> response = ticketServicePort.getAll(eventId, status, pageable, userId);
         log.info("GET /api/v1/tickets - Retrieved {} tickets (page {} of {})",
                 response.getNumberOfElements(), response.getNumber(), response.getTotalPages());
         return ResponseEntity.ok(response);

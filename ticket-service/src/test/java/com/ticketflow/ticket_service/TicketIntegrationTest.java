@@ -39,6 +39,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("Ticket Service — integration tests")
 class TicketIntegrationTest {
 
+    private static final String USER_ID = "user-001";
+    private static final String USER_EMAIL = "user@test.com";
+
     @MockBean
     private ITicketEventPublisher ticketEventPublisher;
 
@@ -49,7 +52,7 @@ class TicketIntegrationTest {
     private ObjectMapper objectMapper;
 
     private static CreateTicketRequest buildCreateRequest() {
-        return new CreateTicketRequest("550e8400-e29b-41d4-a716-446655440000", "user-001");
+        return new CreateTicketRequest("550e8400-e29b-41d4-a716-446655440000");
     }
 
     @Test
@@ -59,11 +62,13 @@ class TicketIntegrationTest {
 
         mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Email", USER_EMAIL)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNotEmpty())
                 .andExpect(jsonPath("$.eventId").value("550e8400-e29b-41d4-a716-446655440000"))
-                .andExpect(jsonPath("$.userId").value("user-001"))
+                .andExpect(jsonPath("$.userId").value(USER_ID))
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
                 .andExpect(jsonPath("$.createdAt").isNotEmpty());
     }
@@ -74,6 +79,8 @@ class TicketIntegrationTest {
         // Purchase
         MvcResult createResult = mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Email", USER_EMAIL)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated())
                 .andReturn();
@@ -81,10 +88,11 @@ class TicketIntegrationTest {
         String id = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText();
 
         // Get by ID
-        mockMvc.perform(get("/api/v1/tickets/{id}", id))
+        mockMvc.perform(get("/api/v1/tickets/{id}", id)
+                        .header("X-User-Id", USER_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
-                .andExpect(jsonPath("$.userId").value("user-001"));
+                .andExpect(jsonPath("$.userId").value(USER_ID));
     }
 
     @Test
@@ -93,6 +101,8 @@ class TicketIntegrationTest {
         // Purchase
         MvcResult createResult = mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Email", USER_EMAIL)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated())
                 .andReturn();
@@ -104,6 +114,7 @@ class TicketIntegrationTest {
 
         mockMvc.perform(put("/api/v1/tickets/{id}", id)
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-Id", USER_ID)
                         .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
@@ -111,19 +122,20 @@ class TicketIntegrationTest {
     }
 
     @Test
-    @DisplayName("should purchase a ticket and list it in the paginated response")
+    @DisplayName("should purchase a ticket and list it in the paginated response for the authenticated user")
     void createAndGetAll_returnsInPage() throws Exception {
-        CreateTicketRequest request = new CreateTicketRequest("aabbccdd-1234-5678-abcd-000000000001", "user-filter-test");
-
         mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Email", USER_EMAIL)
+                        .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(get("/api/v1/tickets").param("userId", "user-filter-test"))
+        mockMvc.perform(get("/api/v1/tickets")
+                        .header("X-User-Id", USER_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
-                .andExpect(jsonPath("$.content[0].userId").value("user-filter-test"));
+                .andExpect(jsonPath("$.content[0].userId").value(USER_ID));
     }
 
     @Test
@@ -132,6 +144,8 @@ class TicketIntegrationTest {
         // Purchase
         MvcResult createResult = mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Email", USER_EMAIL)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated())
                 .andReturn();
@@ -139,7 +153,8 @@ class TicketIntegrationTest {
         String id = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText();
 
         // Cancel
-        mockMvc.perform(patch("/api/v1/tickets/{id}/cancel", id))
+        mockMvc.perform(patch("/api/v1/tickets/{id}/cancel", id)
+                        .header("X-User-Id", USER_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
@@ -151,6 +166,8 @@ class TicketIntegrationTest {
         // Purchase
         MvcResult createResult = mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Email", USER_EMAIL)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated())
                 .andReturn();
@@ -158,11 +175,13 @@ class TicketIntegrationTest {
         String id = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText();
 
         // First cancel
-        mockMvc.perform(patch("/api/v1/tickets/{id}/cancel", id))
+        mockMvc.perform(patch("/api/v1/tickets/{id}/cancel", id)
+                        .header("X-User-Id", USER_ID))
                 .andExpect(status().isOk());
 
         // Second cancel — should conflict
-        mockMvc.perform(patch("/api/v1/tickets/{id}/cancel", id))
+        mockMvc.perform(patch("/api/v1/tickets/{id}/cancel", id)
+                        .header("X-User-Id", USER_ID))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409));
     }
@@ -173,6 +192,8 @@ class TicketIntegrationTest {
         // Purchase
         MvcResult createResult = mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Email", USER_EMAIL)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated())
                 .andReturn();
@@ -180,11 +201,13 @@ class TicketIntegrationTest {
         String id = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText();
 
         // Delete
-        mockMvc.perform(delete("/api/v1/tickets/{id}", id))
+        mockMvc.perform(delete("/api/v1/tickets/{id}", id)
+                        .header("X-User-Id", USER_ID))
                 .andExpect(status().isNoContent());
 
-        // Get by ID — should be 404 now
-        mockMvc.perform(get("/api/v1/tickets/{id}", id))
+        // Get by ID — should be 404 now (deleted record is excluded from active queries)
+        mockMvc.perform(get("/api/v1/tickets/{id}", id)
+                        .header("X-User-Id", USER_ID))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
     }
@@ -192,7 +215,8 @@ class TicketIntegrationTest {
     @Test
     @DisplayName("should return 404 when getting a non-existent ticket")
     void getById_nonExistent_returns404() throws Exception {
-        mockMvc.perform(get("/api/v1/tickets/non-existent-id"))
+        mockMvc.perform(get("/api/v1/tickets/non-existent-id")
+                        .header("X-User-Id", USER_ID))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
     }
@@ -202,13 +226,14 @@ class TicketIntegrationTest {
     void create_invalidRequest_returns400() throws Exception {
         String invalidBody = """
                 {
-                  "eventId": "",
-                  "userId": ""
+                  "eventId": ""
                 }
                 """;
 
         mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Email", USER_EMAIL)
                         .content(invalidBody))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));

@@ -29,22 +29,24 @@ public interface ITicketService {
 
     /**
      * Retrieves a ticket by its unique ID.
+     * The authenticated user must be the owner of the ticket.
      *
-     * @param id the ticket identifier
+     * @param id                  the ticket identifier
+     * @param authenticatedUserId the ID of the authenticated user (from X-User-Id header)
      * @return the ticket response
      */
-    TicketResponse getById(String id);
+    TicketResponse getById(String id, String authenticatedUserId);
 
     /**
-     * Retrieves a paginated and filtered list of tickets.
+     * Retrieves a paginated and filtered list of tickets belonging to the authenticated user.
      *
-     * @param eventId  optional filter by event ID
-     * @param userId   optional filter by user ID
-     * @param status   optional filter by ticket status
-     * @param pageable pagination and sorting parameters
+     * @param eventId             optional filter by event ID
+     * @param status              optional filter by ticket status
+     * @param pageable            pagination and sorting parameters
+     * @param authenticatedUserId the ID of the authenticated user (from X-User-Id header)
      * @return a page of ticket responses
      */
-    Page<TicketResponse> getAll(String eventId, String userId, String status, Pageable pageable);
+    Page<TicketResponse> getAll(String eventId, String status, Pageable pageable, String authenticatedUserId);
 
     /**
      * Transfers a ticket to another user (updates userId).
