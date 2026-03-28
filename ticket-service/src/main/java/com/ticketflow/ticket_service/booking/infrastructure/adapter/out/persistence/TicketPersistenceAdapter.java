@@ -43,7 +43,6 @@ public class TicketPersistenceAdapter implements ITicketPersistencePort {
         log.debug("Saving ticket entity with id: {}", ticket.getId());
         TicketEntity entity = ticketPersistenceMapper.toEntity(ticket);
         TicketEntity savedEntity = ticketJpaRepository.save(entity);
-        savedEntity.setUpdatedAt(null);
         log.debug("Ticket entity saved successfully with id: {}", savedEntity.getId());
         return ticketPersistenceMapper.toDomain(savedEntity);
     }

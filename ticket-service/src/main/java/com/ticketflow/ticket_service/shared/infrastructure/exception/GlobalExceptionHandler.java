@@ -2,6 +2,7 @@ package com.ticketflow.ticket_service.shared.infrastructure.exception;
 
 import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCancelledException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundException;
+import com.ticketflow.ticket_service.booking.domain.exception.TicketOwnershipException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -91,6 +92,23 @@ public class GlobalExceptionHandler {
      * @param request the HTTP request that triggered the error
      * @return a 400 Bad Request response with validation error details
      */
+    @ExceptionHandler(TicketOwnershipException.class)
+    public ResponseEntity<ApiErrorResponse> handleTicketOwnershipException(
+            TicketOwnershipException ex, HttpServletRequest request) {
+        log.warn("Ownership check failed on request to '{}': {}", request.getRequestURI(), ex.getMessage());
+
+        ApiErrorResponse errorResponse = new ApiErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.FORBIDDEN.value(),
+                HttpStatus.FORBIDDEN.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
+        );
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidationException(
             MethodArgumentNotValidException ex, HttpServletRequest request) {

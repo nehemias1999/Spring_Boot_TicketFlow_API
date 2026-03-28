@@ -12,17 +12,12 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
-  # MySQL — omitir si ya tenés MySQL corriendo nativamente en 3306
-  mysql:
-    image: mysql:8.0
-    container_name: ticketflow-mysql
+  mailhog:
+    image: mailhog/mailhog
+    container_name: ticketflow-mailhog
     ports:
-      - "3306:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-    volumes:
-      - mysql_data:/var/lib/mysql
+      - "1025:1025"   # SMTP — usado por notification-service
+      - "8025:8025"   # Web UI — http://localhost:8025
 
 volumes:
   rabbitmq_data:
-  mysql_data:

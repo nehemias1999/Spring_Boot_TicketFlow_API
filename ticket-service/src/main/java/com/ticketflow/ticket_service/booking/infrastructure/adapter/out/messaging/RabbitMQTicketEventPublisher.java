@@ -25,8 +25,8 @@ public class RabbitMQTicketEventPublisher implements ITicketEventPublisher {
     private final RabbitTemplate rabbitTemplate;
 
     @Override
-    public void publishTicketPurchased(String ticketId, String userId) {
-        TicketPurchasedEvent event = new TicketPurchasedEvent(ticketId, userId);
+    public void publishTicketPurchased(String ticketId, String userId, String userEmail) {
+        TicketPurchasedEvent event = new TicketPurchasedEvent(ticketId, userId, userEmail);
         log.info("Publishing TicketPurchasedEvent — ticketId: {}, userId: {}", ticketId, userId);
         rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY, event);
     }

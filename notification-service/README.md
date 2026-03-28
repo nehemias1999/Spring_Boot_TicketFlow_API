@@ -5,7 +5,7 @@
 ![Spring Cloud 2025.0.0](https://img.shields.io/badge/Spring%20Cloud-2025.0.0-brightgreen)
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-AMQP-orange)
 
-Microservice responsible for delivering email notifications in the **TicketFlow** platform. Listens to ticket purchase events from RabbitMQ and notifies the corresponding user asynchronously.
+Microservice responsible for delivering **email notifications** in the TicketFlow platform. Listens to events from RabbitMQ and sends emails asynchronously — no REST endpoints are exposed.
 
 ---
 
@@ -14,7 +14,7 @@ Microservice responsible for delivering email notifications in the **TicketFlow*
 1. [Overview](#overview)
 2. [Architecture](#architecture)
 3. [Tech Stack](#tech-stack)
-4. [Message Contract](#message-contract)
+4. [Message Contracts](#message-contracts)
 5. [RabbitMQ Topology](#rabbitmq-topology)
 6. [Configuration](#configuration)
 7. [Running the Service](#running-the-service)
@@ -24,9 +24,14 @@ Microservice responsible for delivering email notifications in the **TicketFlow*
 
 ## Overview
 
-`notification-service` is a stateless, event-driven microservice. It does not expose any REST endpoints — all input arrives through RabbitMQ. When a ticket is purchased, `ticket-service` publishes a `TicketPurchasedMessage` to the `ticketflow.events` exchange. This service picks it up from the `ticket.purchased.queue`, builds a `Notification`, and delegates delivery to the `EmailSenderPort`.
+`notification-service` is a stateless, event-driven microservice. It does not expose any REST endpoints — all input arrives through RabbitMQ. Two types of events are handled:
 
-The current `EmailSenderPort` implementation (`ConsoleEmailSenderAdapter`) logs the notification to the console as a placeholder. It is designed to be replaced by an SMTP or third-party email adapter without touching the domain or use-case logic.
+| Event | Queue | Trigger | Email sent |
+|-------|-------|---------|-----------|
+| `ticket.purchased` | `ticket.purchased.queue` | Ticket created | "Your ticket has been confirmed" |
+| `user.registered` | `user.registered.queue` | User registered | "Welcome to TicketFlow!" |
+
+Email delivery is handled by `JavaMailEmailSenderAdapter` via JavaMailSender (SMTP). In development, MailHog is used as the SMTP server — inspect sent emails at `http://localhost:8025`.
 
 The service registers with Eureka and fetches its configuration from the Config Server at startup.
 
@@ -34,19 +39,23 @@ The service registers with Eureka and fetches its configuration from the Config 
 
 ## Architecture
 
-The service follows **Hexagonal Architecture (Ports & Adapters)**, keeping the notification use case isolated from both the message broker and the email delivery mechanism.
+The service follows **Hexagonal Architecture (Ports & Adapters)**, keeping notification use cases isolated from both the message broker and the email delivery mechanism.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                    Inbound Adapter                        │
+│                    Inbound Adapters                       │
 │   TicketPurchasedEventListener  (@RabbitListener)         │
 │   queue: ticket.purchased.queue                           │
+│                                                           │
+│   UserRegisteredEventListener   (@RabbitListener)         │
+│   queue: user.registered.queue                            │
 └────────────────────────┬─────────────────────────────────┘
                          │ delegates to
 ┌────────────────────────▼─────────────────────────────────┐
 │                   Application Layer                       │
-│   ProcessNotificationUseCase                              │
-│   builds Notification → calls EmailSenderPort             │
+│   ProcessNotificationUseCase    (ticket purchased)        │
+│   ProcessWelcomeNotificationUseCase  (user registered)    │
+│   build Notification → call EmailSenderPort               │
 └────────────────────────┬─────────────────────────────────┘
                          │ uses port out
 ┌────────────────────────▼─────────────────────────────────┐
@@ -57,8 +66,7 @@ The service follows **Hexagonal Architecture (Ports & Adapters)**, keeping the n
                          │ implements port out
 ┌────────────────────────▼─────────────────────────────────┐
 │                   Outbound Adapter                        │
-│   ConsoleEmailSenderAdapter  (logs to console)            │
-│   → replace with SMTP/SES adapter for production          │
+│   JavaMailEmailSenderAdapter  (sends via SMTP/MailHog)    │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -66,11 +74,11 @@ The service follows **Hexagonal Architecture (Ports & Adapters)**, keeping the n
 
 | Package | Responsibility |
 |---------|---------------|
-| `delivery.infrastructure.in.event` | Inbound AMQP adapter — `TicketPurchasedEventListener`, `TicketPurchasedMessage` DTO |
-| `delivery.application.usecase` | Business logic — `ProcessNotificationUseCase` |
+| `delivery.infrastructure.in.event` | Inbound AMQP adapters — listeners and message DTOs |
+| `delivery.application.usecase` | Business logic — `ProcessNotificationUseCase`, `ProcessWelcomeNotificationUseCase` |
 | `delivery.application.port.out` | Outbound port interface — `EmailSenderPort` |
 | `delivery.domain` | Domain record — `Notification` |
-| `delivery.infrastructure.out.email` | Outbound adapter — `ConsoleEmailSenderAdapter` |
+| `delivery.infrastructure.out.email` | Outbound adapter — `JavaMailEmailSenderAdapter` |
 | `delivery.infrastructure.config` | RabbitMQ infrastructure configuration |
 
 ---
@@ -83,6 +91,7 @@ The service follows **Hexagonal Architecture (Ports & Adapters)**, keeping the n
 | Framework | Spring Boot 3.5.4 |
 | Cloud | Spring Cloud 2025.0.0 (Config, Eureka) |
 | Messaging | Spring AMQP, RabbitMQ |
+| Email | JavaMailSender, MailHog (development SMTP) |
 | Monitoring | Spring Boot Actuator |
 | Testing | JUnit 5, Mockito, spring-rabbit-test |
 | Build | Maven |
@@ -90,7 +99,7 @@ The service follows **Hexagonal Architecture (Ports & Adapters)**, keeping the n
 
 ---
 
-## Message Contract
+## Message Contracts
 
 ### `TicketPurchasedMessage`
 
@@ -98,8 +107,9 @@ Published by `ticket-service` when a ticket is successfully created.
 
 ```json
 {
-  "ticketId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
-  "userId":   "user-001"
+  "ticketId":  "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+  "userId":    "usr_abc123",
+  "userEmail": "user@example.com"
 }
 ```
 
@@ -107,16 +117,43 @@ Published by `ticket-service` when a ticket is successfully created.
 |-------|------|-------------|
 | `ticketId` | String | ID of the purchased ticket |
 | `userId` | String | ID of the user who purchased the ticket |
+| `userEmail` | String | Email address for the notification |
 
-The message is serialized as JSON using `Jackson2JsonMessageConverter`.
-
-### Processing flow
+#### Processing flow
 
 1. `TicketPurchasedEventListener` receives the message from `ticket.purchased.queue`
-2. `ProcessNotificationUseCase.execute(ticketId, userId)` is called
-3. A `Notification` record is created with a UUID, the message `"Your ticket {ticketId} has been confirmed"`, and status `"SENT"`
-4. `EmailSenderPort.sendEmail(notification)` is invoked
-5. `ConsoleEmailSenderAdapter` logs: `[EMAIL] To: {userId} | Message: {message}`
+2. `ProcessNotificationUseCase.execute(ticketId, userId, userEmail)` is called
+3. A `Notification` record is built with subject `"TicketFlow — Your ticket has been confirmed"`
+4. `JavaMailEmailSenderAdapter` sends the email via SMTP to `userEmail`
+
+---
+
+### `UserRegisteredMessage`
+
+Published by `user-service` when a new user is successfully registered.
+
+```json
+{
+  "userId": "usr_abc123",
+  "email":  "user@example.com"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `userId` | String | ID of the newly registered user |
+| `email` | String | Email address for the welcome notification |
+
+#### Processing flow
+
+1. `UserRegisteredEventListener` receives the message from `user.registered.queue`
+2. `ProcessWelcomeNotificationUseCase.execute(userId, email)` is called
+3. A `Notification` record is built with subject `"TicketFlow — Welcome to TicketFlow!"`
+4. `JavaMailEmailSenderAdapter` sends the welcome email via SMTP to `email`
+
+---
+
+Both messages are serialized as JSON using `Jackson2JsonMessageConverter`.
 
 ---
 
@@ -125,10 +162,10 @@ The message is serialized as JSON using `Jackson2JsonMessageConverter`.
 | Element | Name | Type | Details |
 |---------|------|------|---------|
 | Exchange | `ticketflow.events` | Topic | Durable |
-| Queue | `ticket.purchased.queue` | — | Durable |
-| Routing Key | `ticket.purchased` | — | Binds queue to exchange |
+| Queue | `ticket.purchased.queue` | — | Durable, routing key `ticket.purchased` |
+| Queue | `user.registered.queue` | — | Durable, routing key `user.registered` |
 
-The exchange and queue are declared in `RabbitMQConfig` and created automatically on startup if they do not exist.
+The exchange and queues are declared in `RabbitMQConfig` and created automatically on startup if they do not exist.
 
 ---
 
@@ -137,9 +174,6 @@ The exchange and queue are declared in `RabbitMQConfig` and created automaticall
 Key properties from `src/main/resources/application.yml`:
 
 ```yaml
-server:
-  port: 8083
-
 spring:
   application:
     name: notification-service
@@ -157,6 +191,21 @@ spring:
 Additional properties served by the Config Server (`notification-service.yml`):
 
 ```yaml
+spring:
+  mail:
+    host: localhost
+    port: 1025
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+notification:
+  mail:
+    from: noreply@ticketflow.com
+
 eureka:
   client:
     serviceUrl:
@@ -165,7 +214,7 @@ eureka:
     prefer-ip-address: true
 ```
 
-> RabbitMQ must be running before starting this service. Default credentials are `guest`/`guest` on `localhost:5672`.
+> MailHog must be running before starting this service. Start it with `docker-compose -f infra/docker-compose.yml up -d`. Inspect sent emails at `http://localhost:8025`.
 
 ---
 
@@ -176,6 +225,7 @@ eureka:
 - Java 21
 - Maven 3.9+
 - RabbitMQ running locally on port `5672`
+- MailHog running locally on port `1025` (SMTP)
 - `discovery-service` and `config-server` running (optional — import is `optional:`)
 
 ### Steps
@@ -185,7 +235,7 @@ cd notification-service
 ./mvnw spring-boot:run
 ```
 
-Once started, the service registers with Eureka and begins listening on `ticket.purchased.queue`. No HTTP endpoints are exposed.
+Once started, the service registers with Eureka and begins listening on both `ticket.purchased.queue` and `user.registered.queue`. No HTTP endpoints are exposed.
 
 ---
 
@@ -195,7 +245,7 @@ Once started, the service registers with Eureka and begins listening on `ticket.
 ./mvnw test
 ```
 
-Tests run without a live RabbitMQ broker — the `ConnectionFactory` is mocked in the integration test context.
+Tests run without a live RabbitMQ broker or SMTP server — dependencies are mocked in the test context.
 
 The test suite includes:
 
@@ -203,5 +253,4 @@ The test suite includes:
 |------------|------|-------------|
 | `ProcessNotificationUseCaseTest` | Unit | Verifies the use case builds the correct `Notification` and calls `EmailSenderPort` |
 | `TicketPurchasedEventListenerTest` | Unit | Verifies the listener delegates to the use case with the correct arguments |
-| `ConsoleEmailSenderAdapterTest` | Unit | Verifies the adapter logs without throwing exceptions |
 | `NotificationServiceApplicationTests` | Integration | Verifies the Spring context loads with a mocked `ConnectionFactory` |

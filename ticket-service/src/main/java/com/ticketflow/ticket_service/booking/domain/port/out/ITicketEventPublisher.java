@@ -8,5 +8,5 @@ package com.ticketflow.ticket_service.booking.domain.port.out;
  */
 public interface ITicketEventPublisher {
 
-    void publishTicketPurchased(String ticketId, String userId);
+    void publishTicketPurchased(String ticketId, String userId, String userEmail);
 }

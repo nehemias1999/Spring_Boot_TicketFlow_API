@@ -4,7 +4,7 @@
 ![Spring Boot 3.5.4](https://img.shields.io/badge/Spring%20Boot-3.5.4-brightgreen)
 ![Spring Cloud 2025.0.0](https://img.shields.io/badge/Spring%20Cloud-2025.0.0-brightgreen)
 
-Microservice responsible for managing ticket purchases in the **TicketFlow** ticket reservation system. Exposes a REST API consumed by the API Gateway to create, read, update, cancel, and soft-delete tickets.
+Microservice responsible for managing ticket purchases in the **TicketFlow** ticket reservation system. Exposes a REST API consumed by the API Gateway to create, read, update, cancel, and soft-delete tickets. All write operations are protected by ownership validation — only the authenticated user who purchased a ticket can modify or cancel it.
 
 ---
 
@@ -26,6 +26,8 @@ Microservice responsible for managing ticket purchases in the **TicketFlow** tic
 ## Overview
 
 `ticket-service` manages ticket bookings for the TicketFlow platform. It provides full CRUD operations with soft-delete support, a dedicated cancel endpoint, paginated and filterable listings, and automatic schema migrations via Flyway. Ticket IDs are server-generated UUIDs. The service registers itself with Eureka and is accessible through the API Gateway.
+
+User identity is never taken from the request body. The API Gateway validates the JWT token and propagates the user's ID and email via `X-User-Id` and `X-User-Email` headers. The service trusts these headers and uses them to set the ticket owner and validate write access.
 
 ---
 
@@ -100,6 +102,8 @@ The service follows **Hexagonal Architecture (Ports & Adapters)** combined with 
 
 ## API Endpoints
 
+All write endpoints require a valid JWT token passed via the `Authorization: Bearer` header to the API Gateway.
+
 | Method | Path | Description | Request Body | Response |
 |--------|------|-------------|-------------|----------|
 | `POST` | `/api/v1/tickets` | Purchase a new ticket | `CreateTicketRequest` | `201 TicketResponse` |
@@ -115,10 +119,11 @@ Interactive documentation is available via Swagger UI at `http://localhost:8082/
 
 ### POST `/api/v1/tickets`
 
-Purchases a new ticket. Sets `purchaseDate` to now and `status` to `CONFIRMED`. The ID is generated server-side as a UUID.
+Purchases a new ticket. Sets `purchaseDate` to now and `status` to `CONFIRMED`. The ID is generated server-side as a UUID. The `userId` is taken from the `X-User-Id` header set by the API Gateway — it is not part of the request body.
 
 - **201 Created** — ticket created successfully, returns `TicketResponse`
 - **400 Bad Request** — validation failure
+- **401 Unauthorized** — missing or invalid JWT (returned by the gateway)
 
 ---
 
@@ -151,9 +156,10 @@ Returns a paginated list of active tickets with optional filters. Page size is c
 
 ### PUT `/api/v1/tickets/{id}`
 
-Transfers a ticket to a new owner (updates `userId`).
+Transfers a ticket to a new owner (updates `userId`). Only the current owner can transfer the ticket.
 
 - **200 OK** — returns updated `TicketResponse`
+- **403 Forbidden** — authenticated user does not own the ticket
 - **404 Not Found** — ticket does not exist
 - **400 Bad Request** — validation failure
 
@@ -161,9 +167,10 @@ Transfers a ticket to a new owner (updates `userId`).
 
 ### PATCH `/api/v1/tickets/{id}/cancel`
 
-Cancels a confirmed ticket.
+Cancels a confirmed ticket. Only the current owner can cancel the ticket.
 
 - **200 OK** — returns `TicketResponse` with `status: CANCELLED`
+- **403 Forbidden** — authenticated user does not own the ticket
 - **404 Not Found** — ticket does not exist
 - **409 Conflict** — ticket is already cancelled
 
@@ -171,9 +178,10 @@ Cancels a confirmed ticket.
 
 ### DELETE `/api/v1/tickets/{id}`
 
-Soft-deletes a ticket. The record is marked `deleted = true` and excluded from all active queries. The row is never physically removed.
+Soft-deletes a ticket. The record is marked `deleted = true` and excluded from all active queries. The row is never physically removed. Only the current owner can delete the ticket.
 
 - **204 No Content** — deleted successfully
+- **403 Forbidden** — authenticated user does not own the ticket
 - **404 Not Found** — ticket does not exist
 
 ---
@@ -184,15 +192,15 @@ Soft-deletes a ticket. The record is marked `deleted = true` and excluded from a
 
 ```json
 {
-  "eventId": "550e8400-e29b-41d4-a716-446655440000",
-  "userId":  "user-001"
+  "eventId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
 | Field | Type | Constraints |
 |-------|------|-------------|
 | `eventId` | String | Required, max 36 characters |
-| `userId` | String | Required, max 50 characters |
+
+> The `userId` is not part of the request body. It is extracted from the `X-User-Id` header forwarded by the API Gateway after validating the JWT.
 
 ---
 
@@ -212,7 +220,7 @@ Soft-deletes a ticket. The record is marked `deleted = true` and excluded from a
 
 ### `TicketResponse`
 
-**After purchase (`POST`)** — `updatedAt` is always `null`:
+**After purchase (`POST`)** — `updatedAt` equals `createdAt`:
 
 ```json
 {
@@ -222,7 +230,7 @@ Soft-deletes a ticket. The record is marked `deleted = true` and excluded from a
   "purchaseDate": "2026-03-11T10:00:00",
   "status":       "CONFIRMED",
   "createdAt":    "2026-03-11T10:00:00",
-  "updatedAt":    null
+  "updatedAt":    "2026-03-11T10:00:00"
 }
 ```
 
@@ -248,7 +256,7 @@ Soft-deletes a ticket. The record is marked `deleted = true` and excluded from a
 | `purchaseDate` | LocalDateTime | When the ticket was purchased — format `yyyy-MM-dd'T'HH:mm:ss` |
 | `status` | TicketStatus | `CONFIRMED` or `CANCELLED` |
 | `createdAt` | LocalDateTime | Creation timestamp — format `yyyy-MM-dd'T'HH:mm:ss` |
-| `updatedAt` | LocalDateTime | Last update timestamp — `null` on creation, populated after first update |
+| `updatedAt` | LocalDateTime | Last update timestamp — equals `createdAt` on creation, updated on modification |
 
 ---
 
@@ -314,7 +322,7 @@ ALTER TABLE tickets MODIFY COLUMN event_id VARCHAR(36) NOT NULL;
 | `status` | VARCHAR(20) | `CONFIRMED` or `CANCELLED` |
 | `deleted` | BOOLEAN | Soft-delete flag (default `false`) |
 | `created_at` | DATETIME | Set by JPA auditing on insert |
-| `updated_at` | DATETIME | `NULL` on insert; set by JPA auditing on first update |
+| `updated_at` | DATETIME | Set by JPA auditing — same as `created_at` on insert, updated on modification |
 
 ---
 
@@ -341,8 +349,8 @@ spring:
 
 ### `updatedAt` field
 
-- **On `POST` (creation):** `updatedAt` is always returned as `null`. The persistence adapter explicitly clears the in-memory value that Spring Auditing sets during the INSERT, so the response accurately reflects that no update has occurred yet.
-- **On `PUT` / `PATCH` (modification):** `updatedAt` is populated by `@LastModifiedDate` (Spring Data JPA Auditing) with the timestamp of the update.
+- **On `POST` (creation):** `updatedAt` is set to the same value as `createdAt` by Spring Auditing's `@LastModifiedDate` during the INSERT.
+- **On `PUT` / `PATCH` (modification):** `updatedAt` is updated by `@LastModifiedDate` with the timestamp of the modification.
 
 ---
 

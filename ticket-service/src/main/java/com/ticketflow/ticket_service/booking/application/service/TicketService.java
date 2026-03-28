@@ -6,6 +6,7 @@ import com.ticketflow.ticket_service.booking.application.dto.response.TicketResp
 import com.ticketflow.ticket_service.booking.application.mapper.ITicketApplicationMapper;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCancelledException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundException;
+import com.ticketflow.ticket_service.booking.domain.exception.TicketOwnershipException;
 import com.ticketflow.ticket_service.booking.domain.model.Ticket;
 import com.ticketflow.ticket_service.booking.domain.model.TicketStatus;
 import com.ticketflow.ticket_service.booking.domain.port.in.ITicketService;
@@ -49,18 +50,19 @@ public class TicketService implements ITicketService {
      * </p>
      */
     @Override
-    public TicketResponse create(CreateTicketRequest request) {
+    public TicketResponse create(CreateTicketRequest request, String authenticatedUserId, String userEmail) {
         String id = UUID.randomUUID().toString();
-        log.info("Creating ticket with generated id: {}", id);
+        log.info("Creating ticket with generated id: {} for userId: {}", id, authenticatedUserId);
 
         Ticket ticket = ticketApplicationMapper.toDomain(request);
         ticket.setId(id);
+        ticket.setUserId(authenticatedUserId);
         ticket.setPurchaseDate(LocalDateTime.now());
         ticket.setStatus(TicketStatus.CONFIRMED);
 
         Ticket savedTicket = ticketPersistencePort.save(ticket);
 
-        ticketEventPublisher.publishTicketPurchased(savedTicket.getId(), savedTicket.getUserId());
+        ticketEventPublisher.publishTicketPurchased(savedTicket.getId(), savedTicket.getUserId(), userEmail);
 
         log.info("Ticket created successfully with id: {}", savedTicket.getId());
         return ticketApplicationMapper.toResponse(savedTicket);
@@ -116,7 +118,7 @@ public class TicketService implements ITicketService {
      * </p>
      */
     @Override
-    public TicketResponse update(String id, UpdateTicketRequest request) {
+    public TicketResponse update(String id, UpdateTicketRequest request, String authenticatedUserId) {
         log.info("Updating ticket with id: {}", id);
 
         Ticket existingTicket = ticketPersistencePort.findByIdAndDeletedFalse(id)
@@ -124,6 +126,11 @@ public class TicketService implements ITicketService {
                     log.warn("Ticket update failed - ticket with id '{}' not found", id);
                     return new TicketNotFoundException(id);
                 });
+
+        if (!existingTicket.getUserId().equals(authenticatedUserId)) {
+            log.warn("Ticket update forbidden - userId '{}' does not own ticket '{}'", authenticatedUserId, id);
+            throw new TicketOwnershipException(id);
+        }
 
         ticketApplicationMapper.updateDomainFromRequest(request, existingTicket);
         Ticket savedTicket = ticketPersistencePort.update(existingTicket);
@@ -140,7 +147,7 @@ public class TicketService implements ITicketService {
      * </p>
      */
     @Override
-    public TicketResponse cancel(String id) {
+    public TicketResponse cancel(String id, String authenticatedUserId) {
         log.info("Cancelling ticket with id: {}", id);
 
         Ticket ticket = ticketPersistencePort.findByIdAndDeletedFalse(id)
@@ -148,6 +155,11 @@ public class TicketService implements ITicketService {
                     log.warn("Ticket cancellation failed - ticket with id '{}' not found", id);
                     return new TicketNotFoundException(id);
                 });
+
+        if (!ticket.getUserId().equals(authenticatedUserId)) {
+            log.warn("Ticket cancellation forbidden - userId '{}' does not own ticket '{}'", authenticatedUserId, id);
+            throw new TicketOwnershipException(id);
+        }
 
         if (ticket.getStatus() == TicketStatus.CANCELLED) {
             log.warn("Ticket cancellation failed - ticket with id '{}' is already cancelled", id);
@@ -170,7 +182,7 @@ public class TicketService implements ITicketService {
      * </p>
      */
     @Override
-    public void delete(String id) {
+    public void delete(String id, String authenticatedUserId) {
         log.info("Soft-deleting ticket with id: {}", id);
 
         Ticket ticket = ticketPersistencePort.findByIdAndDeletedFalse(id)
@@ -178,6 +190,11 @@ public class TicketService implements ITicketService {
                     log.warn("Ticket soft-delete failed - ticket with id '{}' not found", id);
                     return new TicketNotFoundException(id);
                 });
+
+        if (!ticket.getUserId().equals(authenticatedUserId)) {
+            log.warn("Ticket delete forbidden - userId '{}' does not own ticket '{}'", authenticatedUserId, id);
+            throw new TicketOwnershipException(id);
+        }
 
         ticket.setDeleted(true);
         ticketPersistencePort.update(ticket);

@@ -43,7 +43,6 @@ public class EventPersistenceAdapter implements IEventPersistencePort {
         log.debug("Saving event entity with id: {}", event.getId());
         EventEntity entity = eventPersistenceMapper.toEntity(event);
         EventEntity savedEntity = eventJpaRepository.save(entity);
-        savedEntity.setUpdatedAt(null);
         log.debug("Event entity saved successfully with id: {}", savedEntity.getId());
         return eventPersistenceMapper.toDomain(savedEntity);
     }

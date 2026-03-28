@@ -2,6 +2,7 @@ package com.ticketflow.notification_service.delivery.infrastructure.config;
 
 import com.ticketflow.notification_service.delivery.application.port.out.EmailSenderPort;
 import com.ticketflow.notification_service.delivery.application.usecase.ProcessNotificationUseCase;
+import com.ticketflow.notification_service.delivery.application.usecase.ProcessWelcomeNotificationUseCase;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Queue;
@@ -43,6 +44,18 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public Queue userRegisteredQueue() {
+        return new Queue("user.registered.queue", true);
+    }
+
+    @Bean
+    public Binding userRegisteredBinding(Queue userRegisteredQueue, TopicExchange ticketflowEventsExchange) {
+        return BindingBuilder.bind(userRegisteredQueue)
+                .to(ticketflowEventsExchange)
+                .with("user.registered");
+    }
+
+    @Bean
     public Jackson2JsonMessageConverter jackson2JsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
     }
@@ -59,5 +72,10 @@ public class RabbitMQConfig {
     @Bean
     public ProcessNotificationUseCase processNotificationUseCase(EmailSenderPort emailSenderPort) {
         return new ProcessNotificationUseCase(emailSenderPort);
+    }
+
+    @Bean
+    public ProcessWelcomeNotificationUseCase processWelcomeNotificationUseCase(EmailSenderPort emailSenderPort) {
+        return new ProcessWelcomeNotificationUseCase(emailSenderPort);
     }
 }

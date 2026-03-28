@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -58,9 +59,12 @@ public class TicketController {
             @ApiResponse(responseCode = "400", description = "Invalid request body")
     })
     @PostMapping
-    public ResponseEntity<TicketResponse> create(@Valid @RequestBody CreateTicketRequest request) {
+    public ResponseEntity<TicketResponse> create(
+            @Valid @RequestBody CreateTicketRequest request,
+            @RequestHeader("X-User-Id") String userId,
+            @RequestHeader("X-User-Email") String userEmail) {
         log.info("POST /api/v1/tickets - Request received to purchase ticket");
-        TicketResponse response = ticketServicePort.create(request);
+        TicketResponse response = ticketServicePort.create(request, userId, userEmail);
         log.info("POST /api/v1/tickets - Ticket created successfully with id: {}", response.id());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -109,9 +113,10 @@ public class TicketController {
     @PutMapping("/{id}")
     public ResponseEntity<TicketResponse> update(
             @PathVariable String id,
-            @Valid @RequestBody UpdateTicketRequest request) {
+            @Valid @RequestBody UpdateTicketRequest request,
+            @RequestHeader("X-User-Id") String userId) {
         log.info("PUT /api/v1/tickets/{} - Request received to update ticket", id);
-        TicketResponse response = ticketServicePort.update(id, request);
+        TicketResponse response = ticketServicePort.update(id, request, userId);
         log.info("PUT /api/v1/tickets/{} - Ticket updated successfully", id);
         return ResponseEntity.ok(response);
     }
@@ -123,9 +128,11 @@ public class TicketController {
             @ApiResponse(responseCode = "409", description = "Ticket already cancelled")
     })
     @PatchMapping("/{id}/cancel")
-    public ResponseEntity<TicketResponse> cancel(@PathVariable String id) {
+    public ResponseEntity<TicketResponse> cancel(
+            @PathVariable String id,
+            @RequestHeader("X-User-Id") String userId) {
         log.info("PATCH /api/v1/tickets/{}/cancel - Request received to cancel ticket", id);
-        TicketResponse response = ticketServicePort.cancel(id);
+        TicketResponse response = ticketServicePort.cancel(id, userId);
         log.info("PATCH /api/v1/tickets/{}/cancel - Ticket cancelled successfully", id);
         return ResponseEntity.ok(response);
     }
@@ -136,9 +143,11 @@ public class TicketController {
             @ApiResponse(responseCode = "404", description = "Ticket not found")
     })
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable String id) {
+    public ResponseEntity<Void> delete(
+            @PathVariable String id,
+            @RequestHeader("X-User-Id") String userId) {
         log.info("DELETE /api/v1/tickets/{} - Request received to soft-delete ticket", id);
-        ticketServicePort.delete(id);
+        ticketServicePort.delete(id, userId);
         log.info("DELETE /api/v1/tickets/{} - Ticket soft-deleted successfully", id);
         return ResponseEntity.noContent().build();
     }

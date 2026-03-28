@@ -21,6 +21,6 @@ public class TicketPurchasedEventListener {
     public void onTicketPurchased(TicketPurchasedMessage message) {
         log.info("Received TicketPurchasedMessage — ticketId: {}, userId: {}",
                 message.ticketId(), message.userId());
-        processNotificationUseCase.execute(message.ticketId(), message.userId());
+        processNotificationUseCase.execute(message.ticketId(), message.userId(), message.userEmail());
     }
 }

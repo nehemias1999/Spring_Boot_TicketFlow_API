@@ -42,4 +42,16 @@ public class FallbackController {
         );
         return Mono.just(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body));
     }
+
+    @GetMapping("/auth")
+    public Mono<ResponseEntity<Map<String, Object>>> authFallback() {
+        Map<String, Object> body = Map.of(
+                "timestamp", LocalDateTime.now().toString(),
+                "status", 503,
+                "error", "Service Unavailable",
+                "message", "The authentication service is temporarily unavailable. Please try again later.",
+                "path", "/fallback/auth"
+        );
+        return Mono.just(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body));
+    }
 }

@@ -72,6 +72,22 @@ spring:
                       maxBackoff: 500ms
                       factor: 2
                       basedOnPreviousValue: false
+            - id: user-service
+              uri: lb://user-service
+              predicates:
+                - Path=/api/v1/auth/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: userServiceCB
+                    fallbackUri: forward:/fallback/auth
+
+jwt:
+  secret: ticketflow-secret-key-must-be-at-least-32-chars-long!!
+
+rate-limit:
+  max-requests: 100   # max requests per IP in the time window
+  window-ms: 60000    # sliding window size in milliseconds (1 minute)
 
 resilience4j:
   circuitbreaker:
@@ -83,6 +99,12 @@ resilience4j:
         permittedNumberOfCallsInHalfOpenState: 3
         automaticTransitionFromOpenToHalfOpenEnabled: true
       ticketServiceCB:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      userServiceCB:
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 10s

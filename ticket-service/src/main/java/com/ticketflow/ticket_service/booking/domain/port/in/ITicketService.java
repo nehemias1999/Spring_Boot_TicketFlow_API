@@ -18,12 +18,14 @@ import org.springframework.data.domain.Pageable;
 public interface ITicketService {
 
     /**
-     * Purchases a new ticket.
+     * Purchases a new ticket for the authenticated user.
      *
-     * @param request the creation request containing ticket details
+     * @param request           the creation request containing event details
+     * @param authenticatedUserId the ID of the authenticated user (from X-User-Id header)
+     * @param userEmail         the email of the authenticated user (from X-User-Email header)
      * @return the created ticket response
      */
-    TicketResponse create(CreateTicketRequest request);
+    TicketResponse create(CreateTicketRequest request, String authenticatedUserId, String userEmail);
 
     /**
      * Retrieves a ticket by its unique ID.
@@ -46,25 +48,31 @@ public interface ITicketService {
 
     /**
      * Transfers a ticket to another user (updates userId).
+     * The authenticated user must be the current owner of the ticket.
      *
-     * @param id      the ticket identifier
-     * @param request the update request containing the new userId
+     * @param id                  the ticket identifier
+     * @param request             the update request containing the new userId
+     * @param authenticatedUserId the ID of the authenticated user (from X-User-Id header)
      * @return the updated ticket response
      */
-    TicketResponse update(String id, UpdateTicketRequest request);
+    TicketResponse update(String id, UpdateTicketRequest request, String authenticatedUserId);
 
     /**
      * Cancels an active ticket.
+     * The authenticated user must be the current owner of the ticket.
      *
-     * @param id the ticket identifier
+     * @param id                  the ticket identifier
+     * @param authenticatedUserId the ID of the authenticated user (from X-User-Id header)
      * @return the cancelled ticket response
      */
-    TicketResponse cancel(String id);
+    TicketResponse cancel(String id, String authenticatedUserId);
 
     /**
      * Soft-deletes a ticket by its unique ID.
+     * The authenticated user must be the current owner of the ticket.
      *
-     * @param id the ticket identifier
+     * @param id                  the ticket identifier
+     * @param authenticatedUserId the ID of the authenticated user (from X-User-Id header)
      */
-    void delete(String id);
+    void delete(String id, String authenticatedUserId);
 }

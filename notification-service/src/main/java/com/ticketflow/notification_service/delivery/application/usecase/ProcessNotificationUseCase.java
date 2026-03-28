@@ -20,10 +20,10 @@ public class ProcessNotificationUseCase {
         this.emailSenderPort = emailSenderPort;
     }
 
-    public void execute(String ticketId, String userId) {
+    public void execute(String ticketId, String userId, String userEmail) {
         String message = "Your ticket " + ticketId + " has been confirmed";
         Notification notification = new Notification(
-                UUID.randomUUID().toString(), ticketId, userId, message, "SENT");
+                UUID.randomUUID().toString(), ticketId, userId, userEmail, message, "SENT");
         emailSenderPort.sendEmail(notification);
     }
 }
