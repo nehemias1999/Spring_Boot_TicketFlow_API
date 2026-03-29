@@ -4,10 +4,12 @@ import com.ticketflow.event_service.catalog.application.dto.response.EventRespon
 import com.ticketflow.event_service.catalog.application.dto.request.CreateEventRequest;
 import com.ticketflow.event_service.catalog.application.dto.request.UpdateEventRequest;
 import com.ticketflow.event_service.catalog.application.mapper.IEventApplicationMapper;
+import com.ticketflow.event_service.catalog.domain.exception.AccessDeniedException;
 import com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException;
 import com.ticketflow.event_service.catalog.domain.model.Event;
 import com.ticketflow.event_service.catalog.domain.port.in.IEventService;
 import com.ticketflow.event_service.catalog.domain.port.out.IEventPersistencePort;
+import com.ticketflow.event_service.shared.infrastructure.security.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -15,14 +17,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
  * Application service implementing the {@link IEventService} inbound port.
- * <p>
- * Contains all business logic for event CRUD operations including
- * soft-delete handling and delegation to the persistence outbound port.
- * </p>
  *
  * @author TicketFlow Team
  */
@@ -35,113 +34,101 @@ public class EventService implements IEventService {
     private final IEventPersistencePort eventPersistencePort;
     private final IEventApplicationMapper eventApplicationMapper;
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Generates a UUID as the event ID server-side before persisting.
-     * </p>
-     */
     @Override
-    public EventResponse create(CreateEventRequest request) {
+    public EventResponse create(CreateEventRequest request, String creatorId, String role) {
+        RoleValidator.requireAnyRole(role, "SELLER", "ADMIN");
+
         String id = UUID.randomUUID().toString();
-        log.info("Creating event entry with generated id: {}", id);
+        log.info("Creating event with generated id: {}", id);
 
         Event event = eventApplicationMapper.toDomain(request);
         event.setId(id);
-        Event savedEvent = eventPersistencePort.save(event);
+        event.setCreatorId("ADMIN".equalsIgnoreCase(role) ? null : creatorId);
 
-        log.info("Event entry created successfully with id: {}", savedEvent.getId());
+        Event savedEvent = eventPersistencePort.save(event);
+        log.info("Event created successfully with id: {}", savedEvent.getId());
         return eventApplicationMapper.toResponse(savedEvent);
     }
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Throws {@link EventNotFoundException} if no active event with the given ID exists.
-     * </p>
-     */
     @Override
     @Transactional(readOnly = true)
     public EventResponse getById(String id) {
-        log.info("Retrieving event entry with id: {}", id);
-
+        log.info("Retrieving event with id: {}", id);
         Event event = eventPersistencePort.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> {
-                    log.warn("Event retrieval failed - event with id '{}' not found", id);
+                    log.warn("Event with id '{}' not found", id);
                     return new EventNotFoundException(id);
                 });
-
-        log.info("Event entry retrieved successfully with id: {}", id);
         return eventApplicationMapper.toResponse(event);
     }
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Delegates pagination directly to the persistence port and maps
-     * each domain object to a response DTO.
-     * </p>
-     */
     @Override
     @Transactional(readOnly = true)
     public Page<EventResponse> getAll(String title, String location, Pageable pageable) {
-        log.info("Retrieving all event entries - title: {}, location: {}, page: {}, size: {}",
-                title, location, pageable.getPageNumber(), pageable.getPageSize());
-
+        log.info("Retrieving events - title: {}, location: {}, page: {}",
+                title, location, pageable.getPageNumber());
         Page<EventResponse> result = eventPersistencePort.findAllByFilters(title, location, pageable)
                 .map(eventApplicationMapper::toResponse);
-
-        log.info("Retrieved {} event entries out of {} total", result.getNumberOfElements(), result.getTotalElements());
+        log.info("Retrieved {} events out of {} total",
+                result.getNumberOfElements(), result.getTotalElements());
         return result;
     }
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Loads the existing event, applies the updates via the application mapper,
-     * and persists the changes. Throws {@link EventNotFoundException} if the event
-     * does not exist or has been soft-deleted.
-     * </p>
-     */
     @Override
-    public EventResponse update(String id, UpdateEventRequest request) {
-        log.info("Updating event entry with id: {}", id);
+    public EventResponse update(String id, UpdateEventRequest request, String requestingUserId, String role) {
+        RoleValidator.requireAnyRole(role, "SELLER", "ADMIN");
 
-        Event existingEvent = eventPersistencePort.findByIdAndDeletedFalse(id)
+        Event existing = eventPersistencePort.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> {
-                    log.warn("Event update failed - event with id '{}' not found", id);
+                    log.warn("Event update failed - event '{}' not found", id);
                     return new EventNotFoundException(id);
                 });
 
-        eventApplicationMapper.updateDomainFromRequest(request, existingEvent);
-        Event savedEvent = eventPersistencePort.update(existingEvent);
+        if ("SELLER".equalsIgnoreCase(role) && !requestingUserId.equals(existing.getCreatorId())) {
+            log.warn("Seller '{}' attempted to update event '{}' owned by '{}'",
+                    requestingUserId, id, existing.getCreatorId());
+            throw new AccessDeniedException("You can only update your own events");
+        }
 
-        log.info("Event entry updated successfully with id: {}", savedEvent.getId());
-        return eventApplicationMapper.toResponse(savedEvent);
+        eventApplicationMapper.updateDomainFromRequest(request, existing);
+        Event saved = eventPersistencePort.update(existing);
+        log.info("Event '{}' updated successfully", id);
+        return eventApplicationMapper.toResponse(saved);
     }
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Sets the {@code deleted} flag to {@code true} and persists the change.
-     * The record remains in the database and is excluded from active queries.
-     * Throws {@link EventNotFoundException} if the event does not exist.
-     * </p>
-     */
     @Override
-    public void delete(String id) {
-        log.info("Soft-deleting event entry with id: {}", id);
+    public void delete(String id, String requestingUserId, String role) {
+        RoleValidator.requireAnyRole(role, "SELLER", "ADMIN");
 
         Event event = eventPersistencePort.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> {
-                    log.warn("Event soft-delete failed - event with id '{}' not found", id);
+                    log.warn("Event delete failed - event '{}' not found", id);
                     return new EventNotFoundException(id);
                 });
 
+        if ("SELLER".equalsIgnoreCase(role) && !requestingUserId.equals(event.getCreatorId())) {
+            log.warn("Seller '{}' attempted to delete event '{}' owned by '{}'",
+                    requestingUserId, id, event.getCreatorId());
+            throw new AccessDeniedException("You can only delete your own events");
+        }
+
         event.setDeleted(true);
         eventPersistencePort.update(event);
-
-        log.info("Event entry soft-deleted successfully with id: {}", id);
+        log.info("Event '{}' soft-deleted successfully", id);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<EventResponse> getMyEvents(String creatorId, Pageable pageable) {
+        log.info("Retrieving events for creatorId: {}", creatorId);
+        return eventPersistencePort.findAllByCreatorIdAndDeletedFalse(creatorId, pageable)
+                .map(eventApplicationMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> getMyEventIds(String creatorId) {
+        log.debug("Retrieving event IDs for creatorId: {}", creatorId);
+        return eventPersistencePort.findIdsByCreatorIdAndDeletedFalse(creatorId);
+    }
 }

@@ -54,18 +54,20 @@ public class JwtUtil {
     /**
      * Generates a signed JWT token containing the user's core identity claims.
      *
-     * @param userId the unique identifier of the user (used as {@code sub})
-     * @param email  the user's email address (added as a custom claim)
-     * @param role   the user's role name (added as a custom claim)
+     * @param userId   the unique identifier of the user (used as {@code sub})
+     * @param username the user's username (added as a custom claim)
+     * @param email    the user's email address (added as a custom claim)
+     * @param role     the user's role name (added as a custom claim)
      * @return a compact, URL-safe signed JWT string
      */
-    public String generateToken(String userId, String email, String role) {
+    public String generateToken(String userId, String username, String email, String role) {
         log.debug("Generating JWT token for userId: {}", userId);
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
 
         return Jwts.builder()
                 .subject(userId)
+                .claim("username", username)
                 .claim("email", email)
                 .claim("role", role)
                 .issuedAt(now)

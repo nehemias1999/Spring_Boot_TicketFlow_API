@@ -4,6 +4,7 @@ import com.ticketflow.ticket_service.booking.domain.model.Ticket;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -51,4 +52,14 @@ public interface ITicketPersistencePort {
      * @return the updated ticket domain object
      */
     Ticket update(Ticket ticket);
+
+    /**
+     * Retrieves a paginated list of active tickets whose eventId is in the given list.
+     * Used for SELLER ticket listing.
+     *
+     * @param eventIds list of event IDs owned by the SELLER
+     * @param pageable pagination and sorting parameters
+     * @return a page of ticket domain objects
+     */
+    Page<Ticket> findByEventIdsIn(List<String> eventIds, Pageable pageable);
 }

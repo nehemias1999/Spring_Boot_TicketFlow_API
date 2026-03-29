@@ -1,5 +1,6 @@
 package com.ticketflow.ticket_service.shared.infrastructure.exception;
 
+import com.ticketflow.ticket_service.booking.domain.exception.AccessDeniedException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCancelledException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketOwnershipException;
@@ -31,6 +32,20 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     private static final String CORRELATION_HEADER = "X-Correlation-Id";
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDeniedException(
+            AccessDeniedException ex, HttpServletRequest request) {
+        ApiErrorResponse errorResponse = new ApiErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.FORBIDDEN.value(),
+                HttpStatus.FORBIDDEN.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
+        );
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
+    }
 
     /**
      * Handles {@link TicketNotFoundException} when a requested ticket is not found.

@@ -32,6 +32,7 @@ public interface IEventApplicationMapper {
      * @return a new {@link Event} domain object ready to be persisted
      */
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "creatorId", ignore = true)
     @Mapping(target = "deleted", constant = "false")
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
@@ -54,6 +55,7 @@ public interface IEventApplicationMapper {
      * @param event the existing event domain object to update in place
      */
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "creatorId", ignore = true)
     @Mapping(target = "deleted", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)

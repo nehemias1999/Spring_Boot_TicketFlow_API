@@ -1,5 +1,6 @@
 package com.ticketflow.event_service.shared.infrastructure.exception;
 
+import com.ticketflow.event_service.catalog.domain.exception.AccessDeniedException;
 import com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,21 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     private static final String CORRELATION_HEADER = "X-Correlation-Id";
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDeniedException(
+            AccessDeniedException ex, HttpServletRequest request) {
+        log.warn("Access denied on request to '{}': {}", request.getRequestURI(), ex.getMessage());
+        ApiErrorResponse errorResponse = new ApiErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.FORBIDDEN.value(),
+                HttpStatus.FORBIDDEN.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
+        );
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
+    }
 
     /**
      * Handles {@link EventNotFoundException} when a requested event is not found.

@@ -58,6 +58,12 @@ public class Event {
     private BigDecimal basePrice;
 
     /**
+     * The ID of the user (SELLER) who created this event.
+     * {@code null} for events created before the RBAC feature was introduced.
+     */
+    private String creatorId;
+
+    /**
      * Soft-delete flag. When {@code true}, the event entry is considered deleted.
      */
     @Builder.Default

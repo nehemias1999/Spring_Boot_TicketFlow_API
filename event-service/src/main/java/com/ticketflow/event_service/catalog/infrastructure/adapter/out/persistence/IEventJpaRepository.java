@@ -4,7 +4,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -34,5 +37,9 @@ public interface IEventJpaRepository extends JpaRepository<EventEntity, String>,
      */
     Page<EventEntity> findAllByDeletedFalse(Pageable pageable);
 
+    Page<EventEntity> findAllByCreatorIdAndDeletedFalse(String creatorId, Pageable pageable);
+
+    @Query("SELECT e.id FROM EventEntity e WHERE e.creatorId = :creatorId AND e.deleted = false")
+    List<String> findIdsByCreatorIdAndDeletedFalse(@Param("creatorId") String creatorId);
 }
 

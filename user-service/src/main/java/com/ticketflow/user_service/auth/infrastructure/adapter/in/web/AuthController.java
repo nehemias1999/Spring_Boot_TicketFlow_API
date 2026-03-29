@@ -74,7 +74,7 @@ public class AuthController {
     })
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        log.info("POST /api/v1/auth/login - Request received to login user with email: {}", request.email());
+        log.info("POST /api/v1/auth/login - Request received to login user with identifier: {}", request.identifier());
         AuthResponse response = userServicePort.login(request);
         log.info("POST /api/v1/auth/login - User logged in successfully with id: {}", response.userId());
         return ResponseEntity.ok(response);

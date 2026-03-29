@@ -31,6 +31,11 @@ public class User {
     private String id;
 
     /**
+     * The user's unique username, used as an alternative login credential.
+     */
+    private String username;
+
+    /**
      * The user's email address, used as the unique login credential.
      */
     private String email;

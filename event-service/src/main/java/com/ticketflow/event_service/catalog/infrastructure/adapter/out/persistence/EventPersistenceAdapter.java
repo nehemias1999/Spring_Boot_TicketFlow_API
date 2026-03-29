@@ -11,6 +11,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -125,5 +126,17 @@ public class EventPersistenceAdapter implements IEventPersistencePort {
         return eventPersistenceMapper.toDomain(updatedEntity);
     }
 
+    @Override
+    public Page<Event> findAllByCreatorIdAndDeletedFalse(String creatorId, Pageable pageable) {
+        log.debug("Finding events by creatorId: {}", creatorId);
+        return eventJpaRepository.findAllByCreatorIdAndDeletedFalse(creatorId, pageable)
+                .map(eventPersistenceMapper::toDomain);
+    }
+
+    @Override
+    public List<String> findIdsByCreatorIdAndDeletedFalse(String creatorId) {
+        log.debug("Finding event IDs by creatorId: {}", creatorId);
+        return eventJpaRepository.findIdsByCreatorIdAndDeletedFalse(creatorId);
+    }
 }
 

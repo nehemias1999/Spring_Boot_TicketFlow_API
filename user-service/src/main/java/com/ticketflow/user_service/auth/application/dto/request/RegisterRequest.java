@@ -6,16 +6,17 @@ import jakarta.validation.constraints.Size;
 
 /**
  * Request DTO for the user registration endpoint.
- * <p>
- * Contains the minimum required fields to create a new user account.
- * The password is accepted as plain text and hashed by the service layer.
- * </p>
  *
+ * @param username the user's unique username; must be between 3 and 50 characters
  * @param email    the user's email address; must be a valid email format and at most 255 characters
  * @param password the user's plain-text password; must be between 6 and 100 characters
  * @author TicketFlow Team
  */
 public record RegisterRequest(
+
+        @NotBlank(message = "Username is required")
+        @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+        String username,
 
         @NotBlank(message = "Email is required")
         @Email(message = "Email must be a valid email address")

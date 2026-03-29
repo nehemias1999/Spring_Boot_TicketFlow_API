@@ -30,13 +30,16 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * REST controller exposing CRUD and cancellation endpoints for ticket management.
  * <p>
- * This is an inbound adapter in the hexagonal architecture. It receives
- * HTTP requests, delegates to the {@link ITicketService}, and returns
- * appropriate HTTP responses.
- * </p>
- * <p>
  * Base path: {@code /api/v1/tickets}
  * </p>
+ * Role enforcement:
+ * <ul>
+ *   <li>POST: USER, ADMIN</li>
+ *   <li>GET/{id}: USER/SELLER own ticket; MODERATOR/ADMIN any</li>
+ *   <li>GET: USER own; SELLER own-events; MODERATOR/ADMIN all</li>
+ *   <li>PATCH cancel: USER (own), ADMIN</li>
+ *   <li>DELETE: USER (own), ADMIN</li>
+ * </ul>
  *
  * @author TicketFlow Team
  */
@@ -51,38 +54,42 @@ public class TicketController {
 
     private final ITicketService ticketServicePort;
 
-    @Operation(summary = "Purchase a new ticket")
+    @Operation(summary = "Purchase a new ticket (USER, ADMIN)")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Ticket purchased successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid request body")
+            @ApiResponse(responseCode = "400", description = "Invalid request body"),
+            @ApiResponse(responseCode = "403", description = "Insufficient role")
     })
     @PostMapping
     public ResponseEntity<TicketResponse> create(
             @Valid @RequestBody CreateTicketRequest request,
             @RequestHeader("X-User-Id") String userId,
-            @RequestHeader("X-User-Email") String userEmail) {
-        log.info("POST /api/v1/tickets - Request received to purchase ticket");
-        TicketResponse response = ticketServicePort.create(request, userId, userEmail);
-        log.info("POST /api/v1/tickets - Ticket created successfully with id: {}", response.id());
+            @RequestHeader("X-User-Email") String userEmail,
+            @RequestHeader("X-User-Role") String userRole) {
+        log.info("POST /api/v1/tickets - userId: {}, role: {}", userId, userRole);
+        TicketResponse response = ticketServicePort.create(request, userId, userEmail, userRole);
+        log.info("POST /api/v1/tickets - Ticket created with id: {}", response.id());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @Operation(summary = "Get a ticket by ID")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Ticket found"),
+            @ApiResponse(responseCode = "403", description = "Not the owner"),
             @ApiResponse(responseCode = "404", description = "Ticket not found")
     })
     @GetMapping("/{id}")
     public ResponseEntity<TicketResponse> getById(
             @PathVariable String id,
-            @RequestHeader("X-User-Id") String userId) {
-        log.info("GET /api/v1/tickets/{} - Request received to retrieve ticket", id);
-        TicketResponse response = ticketServicePort.getById(id, userId);
+            @RequestHeader("X-User-Id") String userId,
+            @RequestHeader("X-User-Role") String userRole) {
+        log.info("GET /api/v1/tickets/{} - userId: {}, role: {}", id, userId, userRole);
+        TicketResponse response = ticketServicePort.getById(id, userId, userRole);
         log.info("GET /api/v1/tickets/{} - Ticket retrieved successfully", id);
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "List tickets with optional filters and pagination")
+    @Operation(summary = "List tickets (role-dependent scope)")
     @ApiResponse(responseCode = "200", description = "Paginated list of tickets")
     @GetMapping
     public ResponseEntity<Page<TicketResponse>> getAll(
@@ -92,21 +99,22 @@ public class TicketController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir,
-            @RequestHeader("X-User-Id") String userId) {
+            @RequestHeader("X-User-Id") String userId,
+            @RequestHeader("X-User-Role") String userRole) {
         size = Math.min(size, MAX_PAGE_SIZE);
-        log.info("GET /api/v1/tickets - Request received - page: {}, size: {}, eventId: {}, status: {}, sortBy: {}, sortDir: {}",
-                page, size, eventId, status, sortBy, sortDir);
-        Sort sort = "asc".equalsIgnoreCase(sortDir) ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
+        Sort sort = "asc".equalsIgnoreCase(sortDir)
+                ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
-        Page<TicketResponse> response = ticketServicePort.getAll(eventId, status, pageable, userId);
-        log.info("GET /api/v1/tickets - Retrieved {} tickets (page {} of {})",
-                response.getNumberOfElements(), response.getNumber(), response.getTotalPages());
+        log.info("GET /api/v1/tickets - role: {}, userId: {}", userRole, userId);
+        Page<TicketResponse> response = ticketServicePort.getAll(eventId, status, pageable, userId, userRole);
+        log.info("GET /api/v1/tickets - Retrieved {} tickets", response.getNumberOfElements());
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Cancel an active ticket")
+    @Operation(summary = "Cancel an active ticket (USER: own; ADMIN: any)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Ticket cancelled successfully"),
+            @ApiResponse(responseCode = "403", description = "Insufficient role or not the owner"),
             @ApiResponse(responseCode = "404", description = "Ticket not found"),
             @ApiResponse(responseCode = "409", description = "Ticket already cancelled")
     })
@@ -114,24 +122,27 @@ public class TicketController {
     public ResponseEntity<TicketResponse> cancel(
             @PathVariable String id,
             @RequestHeader("X-User-Id") String userId,
-            @RequestHeader("X-User-Email") String userEmail) {
-        log.info("PATCH /api/v1/tickets/{}/cancel - Request received to cancel ticket", id);
-        TicketResponse response = ticketServicePort.cancel(id, userId, userEmail);
+            @RequestHeader("X-User-Email") String userEmail,
+            @RequestHeader("X-User-Role") String userRole) {
+        log.info("PATCH /api/v1/tickets/{}/cancel - userId: {}, role: {}", id, userId, userRole);
+        TicketResponse response = ticketServicePort.cancel(id, userId, userEmail, userRole);
         log.info("PATCH /api/v1/tickets/{}/cancel - Ticket cancelled successfully", id);
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Soft-delete a ticket by ID")
+    @Operation(summary = "Soft-delete a ticket (USER: own; ADMIN: any)")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Ticket deleted successfully"),
+            @ApiResponse(responseCode = "403", description = "Insufficient role or not the owner"),
             @ApiResponse(responseCode = "404", description = "Ticket not found")
     })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @PathVariable String id,
-            @RequestHeader("X-User-Id") String userId) {
-        log.info("DELETE /api/v1/tickets/{} - Request received to soft-delete ticket", id);
-        ticketServicePort.delete(id, userId);
+            @RequestHeader("X-User-Id") String userId,
+            @RequestHeader("X-User-Role") String userRole) {
+        log.info("DELETE /api/v1/tickets/{} - userId: {}, role: {}", id, userId, userRole);
+        ticketServicePort.delete(id, userId, userRole);
         log.info("DELETE /api/v1/tickets/{} - Ticket soft-deleted successfully", id);
         return ResponseEntity.noContent().build();
     }

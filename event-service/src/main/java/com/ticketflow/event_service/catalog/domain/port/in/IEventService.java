@@ -6,68 +6,26 @@ import com.ticketflow.event_service.catalog.application.dto.request.UpdateEventR
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
+
 /**
  * Inbound port defining the use cases available for event management.
- * <p>
- * This interface is implemented by the application service layer and
- * consumed by the infrastructure adapters (e.g., REST controller).
- * </p>
  *
  * @author TicketFlow Team
  */
 public interface IEventService {
 
-    /**
-     * Creates a new event entry in the system.
-     *
-     * @param request the data required to create an event entry
-     * @return the created event as a response DTO
-     * @throws com.ticketflow.event_service.catalog.domain.exception.EventAlreadyExistsException
-     *         if an event with the same ID already exists
-     */
-    EventResponse create(CreateEventRequest request);
+    EventResponse create(CreateEventRequest request, String creatorId, String role);
 
-    /**
-     * Retrieves a single event entry by its unique ID.
-     *
-     * @param id the unique business identifier of the event
-     * @return the event data as a response DTO
-     * @throws com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException
-     *         if no active event with the given ID exists
-     */
     EventResponse getById(String id);
 
-    /**
-     * Retrieves a paginated and filtered list of all active (non-deleted) event entries.
-     *
-     * @param title    optional title filter (case-insensitive LIKE), may be {@code null}
-     * @param location optional location filter (case-insensitive LIKE), may be {@code null}
-     * @param pageable pagination and sorting parameters
-     * @return a page of event response DTOs
-     */
     Page<EventResponse> getAll(String title, String location, Pageable pageable);
 
-    /**
-     * Updates an existing event entry with the provided data.
-     *
-     * @param id      the unique business identifier of the event to update
-     * @param request the data to apply as updates
-     * @return the updated event as a response DTO
-     * @throws com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException
-     *         if no active event with the given ID exists
-     */
-    EventResponse update(String id, UpdateEventRequest request);
+    EventResponse update(String id, UpdateEventRequest request, String requestingUserId, String role);
 
-    /**
-     * Performs a soft delete on the event entry with the given ID.
-     * <p>
-     * The record is not physically removed; instead, it is marked as deleted.
-     * </p>
-     *
-     * @param id the unique business identifier of the event to delete
-     * @throws com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException
-     *         if no active event with the given ID exists
-     */
-    void delete(String id);
+    void delete(String id, String requestingUserId, String role);
+
+    Page<EventResponse> getMyEvents(String creatorId, Pageable pageable);
+
+    List<String> getMyEventIds(String creatorId);
 }
-

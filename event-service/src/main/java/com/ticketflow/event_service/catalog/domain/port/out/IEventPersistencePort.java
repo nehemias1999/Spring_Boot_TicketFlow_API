@@ -4,6 +4,7 @@ import com.ticketflow.event_service.catalog.domain.model.Event;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -58,5 +59,23 @@ public interface IEventPersistencePort {
      * @return the updated event
      */
     Event update(Event event);
+
+    /**
+     * Retrieves a paginated list of active events created by the given creator.
+     *
+     * @param creatorId the user ID of the SELLER
+     * @param pageable  pagination and sorting parameters
+     * @return a page of event domain objects
+     */
+    Page<Event> findAllByCreatorIdAndDeletedFalse(String creatorId, Pageable pageable);
+
+    /**
+     * Returns only the IDs of active events created by the given creator.
+     * Used by ticket-service to filter tickets by seller's events.
+     *
+     * @param creatorId the user ID of the SELLER
+     * @return list of event IDs
+     */
+    List<String> findIdsByCreatorIdAndDeletedFalse(String creatorId);
 }
 

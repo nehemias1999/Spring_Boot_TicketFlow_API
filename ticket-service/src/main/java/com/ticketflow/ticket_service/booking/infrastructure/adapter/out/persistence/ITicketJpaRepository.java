@@ -1,8 +1,11 @@
 package com.ticketflow.ticket_service.booking.infrastructure.adapter.out.persistence;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -24,4 +27,5 @@ public interface ITicketJpaRepository extends JpaRepository<TicketEntity, String
      */
     Optional<TicketEntity> findByIdAndDeletedFalse(String id);
 
+    Page<TicketEntity> findByEventIdInAndDeletedFalse(List<String> eventIds, Pageable pageable);
 }

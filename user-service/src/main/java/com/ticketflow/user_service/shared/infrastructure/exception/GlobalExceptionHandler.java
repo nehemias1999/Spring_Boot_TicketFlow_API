@@ -1,7 +1,10 @@
 package com.ticketflow.user_service.shared.infrastructure.exception;
 
+import com.ticketflow.user_service.auth.domain.exception.AccessDeniedException;
 import com.ticketflow.user_service.auth.domain.exception.InvalidCredentialsException;
+import com.ticketflow.user_service.auth.domain.exception.InvalidRoleException;
 import com.ticketflow.user_service.auth.domain.exception.UserAlreadyExistsException;
+import com.ticketflow.user_service.auth.domain.exception.UserNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -77,6 +80,51 @@ public class GlobalExceptionHandler {
         );
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDeniedException(
+            AccessDeniedException ex, HttpServletRequest request) {
+        log.warn("Access denied on request to '{}': {}", request.getRequestURI(), ex.getMessage());
+        ApiErrorResponse errorResponse = new ApiErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.FORBIDDEN.value(),
+                HttpStatus.FORBIDDEN.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
+        );
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleUserNotFoundException(
+            UserNotFoundException ex, HttpServletRequest request) {
+        log.warn("User not found on request to '{}': {}", request.getRequestURI(), ex.getMessage());
+        ApiErrorResponse errorResponse = new ApiErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.NOT_FOUND.value(),
+                HttpStatus.NOT_FOUND.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+    }
+
+    @ExceptionHandler(InvalidRoleException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidRoleException(
+            InvalidRoleException ex, HttpServletRequest request) {
+        log.warn("Invalid role on request to '{}': {}", request.getRequestURI(), ex.getMessage());
+        ApiErrorResponse errorResponse = new ApiErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
 
     /**

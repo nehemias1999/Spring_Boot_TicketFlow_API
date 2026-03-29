@@ -75,6 +75,12 @@ public class EventEntity {
     private BigDecimal basePrice;
 
     /**
+     * The user ID of the SELLER who created this event. Nullable for legacy records.
+     */
+    @Column(name = "creator_id", nullable = true, length = 36)
+    private String creatorId;
+
+    /**
      * Soft-delete flag. {@code true} means the record is logically deleted.
      */
     @Column(name = "deleted", nullable = false)

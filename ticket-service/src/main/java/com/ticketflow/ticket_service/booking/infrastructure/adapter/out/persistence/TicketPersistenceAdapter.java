@@ -11,6 +11,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -109,5 +111,16 @@ public class TicketPersistenceAdapter implements ITicketPersistencePort {
         TicketEntity updatedEntity = ticketJpaRepository.save(entity);
         log.debug("Ticket entity updated successfully with id: {}", updatedEntity.getId());
         return ticketPersistenceMapper.toDomain(updatedEntity);
+    }
+
+    @Override
+    public Page<Ticket> findByEventIdsIn(List<String> eventIds, Pageable pageable) {
+        if (eventIds == null || eventIds.isEmpty()) {
+            log.debug("findByEventIdsIn called with empty list, returning empty page");
+            return org.springframework.data.domain.Page.empty(pageable);
+        }
+        log.debug("Finding tickets for {} event IDs", eventIds.size());
+        return ticketJpaRepository.findByEventIdInAndDeletedFalse(eventIds, pageable)
+                .map(ticketPersistenceMapper::toDomain);
     }
 }

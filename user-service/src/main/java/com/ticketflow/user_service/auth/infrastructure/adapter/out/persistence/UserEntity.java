@@ -47,6 +47,12 @@ public class UserEntity {
     private String id;
 
     /**
+     * The user's unique username, used as an alternative login credential.
+     */
+    @Column(name = "username", nullable = true, length = 50, unique = true)
+    private String username;
+
+    /**
      * The user's email address. Used as the unique login credential.
      */
     @Column(name = "email", nullable = false, length = 255, unique = true)

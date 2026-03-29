@@ -86,6 +86,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         }
 
         String userId = claims.getSubject();
+        String username = claims.get("username", String.class);
         String email = claims.get("email", String.class);
         String role = claims.get("role", String.class);
 
@@ -94,6 +95,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         ServerWebExchange mutatedExchange = exchange.mutate()
                 .request(r -> r
                         .header("X-User-Id", userId)
+                        .header("X-User-Username", username != null ? username : "")
                         .header("X-User-Email", email != null ? email : "")
                         .header("X-User-Role", role != null ? role : ""))
                 .build();

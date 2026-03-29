@@ -3,14 +3,17 @@ package com.ticketflow.ticket_service.booking.application.service;
 import com.ticketflow.ticket_service.booking.application.dto.request.CreateTicketRequest;
 import com.ticketflow.ticket_service.booking.application.dto.response.TicketResponse;
 import com.ticketflow.ticket_service.booking.application.mapper.ITicketApplicationMapper;
+import com.ticketflow.ticket_service.booking.domain.exception.AccessDeniedException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketAlreadyCancelledException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundException;
 import com.ticketflow.ticket_service.booking.domain.exception.TicketOwnershipException;
 import com.ticketflow.ticket_service.booking.domain.model.Ticket;
 import com.ticketflow.ticket_service.booking.domain.model.TicketStatus;
 import com.ticketflow.ticket_service.booking.domain.port.in.ITicketService;
+import com.ticketflow.ticket_service.booking.domain.port.out.IEventServicePort;
 import com.ticketflow.ticket_service.booking.domain.port.out.ITicketEventPublisher;
 import com.ticketflow.ticket_service.booking.domain.port.out.ITicketPersistencePort;
+import com.ticketflow.ticket_service.shared.infrastructure.security.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -19,15 +22,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
  * Application service implementing the {@link ITicketService} inbound port.
- * <p>
- * Contains all business logic for ticket CRUD operations including
- * cancellation guards, soft-delete handling, and delegation to the
- * persistence outbound port.
- * </p>
  *
  * @author TicketFlow Team
  */
@@ -40,18 +39,15 @@ public class TicketService implements ITicketService {
     private final ITicketPersistencePort ticketPersistencePort;
     private final ITicketApplicationMapper ticketApplicationMapper;
     private final ITicketEventPublisher ticketEventPublisher;
+    private final IEventServicePort eventServicePort;
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Generates a UUID as the ticket ID server-side.
-     * Sets {@code purchaseDate} to now and {@code status} to {@link TicketStatus#CONFIRMED}.
-     * </p>
-     */
     @Override
-    public TicketResponse create(CreateTicketRequest request, String authenticatedUserId, String userEmail) {
+    public TicketResponse create(CreateTicketRequest request, String authenticatedUserId,
+                                 String userEmail, String userRole) {
+        RoleValidator.requireAnyRole(userRole, "USER", "ADMIN");
+
         String id = UUID.randomUUID().toString();
-        log.info("Creating ticket with generated id: {} for userId: {}", id, authenticatedUserId);
+        log.info("Creating ticket '{}' for userId: {}", id, authenticatedUserId);
 
         Ticket ticket = ticketApplicationMapper.toDomain(request);
         ticket.setId(id);
@@ -60,121 +56,108 @@ public class TicketService implements ITicketService {
         ticket.setStatus(TicketStatus.CONFIRMED);
 
         Ticket savedTicket = ticketPersistencePort.save(ticket);
-
         ticketEventPublisher.publishTicketPurchased(savedTicket.getId(), savedTicket.getUserId(), userEmail);
 
         log.info("Ticket created successfully with id: {}", savedTicket.getId());
         return ticketApplicationMapper.toResponse(savedTicket);
     }
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Throws {@link TicketNotFoundException} if no active ticket with the given ID exists.
-     * </p>
-     */
     @Override
     @Transactional(readOnly = true)
-    public TicketResponse getById(String id, String authenticatedUserId) {
-        log.info("Retrieving ticket with id: {}", id);
+    public TicketResponse getById(String id, String authenticatedUserId, String userRole) {
+        log.info("Retrieving ticket '{}'", id);
 
         Ticket ticket = ticketPersistencePort.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> {
-                    log.warn("Ticket retrieval failed - ticket with id '{}' not found", id);
+                    log.warn("Ticket '{}' not found", id);
                     return new TicketNotFoundException(id);
                 });
 
-        if (!ticket.getUserId().equals(authenticatedUserId)) {
-            log.warn("Ticket retrieval forbidden - userId '{}' does not own ticket '{}'", authenticatedUserId, id);
+        boolean isPrivileged = "ADMIN".equalsIgnoreCase(userRole)
+                || "MODERATOR".equalsIgnoreCase(userRole);
+
+        if (!isPrivileged && !ticket.getUserId().equals(authenticatedUserId)) {
+            log.warn("userId '{}' does not own ticket '{}'", authenticatedUserId, id);
             throw new TicketOwnershipException(id);
         }
 
-        log.info("Ticket retrieved successfully with id: {}", id);
         return ticketApplicationMapper.toResponse(ticket);
     }
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Delegates pagination and filtering directly to the persistence port and maps
-     * each domain object to a response DTO.
-     * </p>
-     */
     @Override
     @Transactional(readOnly = true)
-    public Page<TicketResponse> getAll(String eventId, String status, Pageable pageable, String authenticatedUserId) {
-        log.info("Retrieving tickets for userId: {} - eventId: {}, status: {}, page: {}, size: {}",
-                authenticatedUserId, eventId, status, pageable.getPageNumber(), pageable.getPageSize());
+    public Page<TicketResponse> getAll(String eventId, String status, Pageable pageable,
+                                       String authenticatedUserId, String userRole) {
+        log.info("Listing tickets - role: {}, userId: {}, eventId: {}, status: {}",
+                userRole, authenticatedUserId, eventId, status);
 
-        Page<TicketResponse> result = ticketPersistencePort.findAllByFilters(eventId, authenticatedUserId, status, pageable)
+        if ("ADMIN".equalsIgnoreCase(userRole) || "MODERATOR".equalsIgnoreCase(userRole)) {
+            return ticketPersistencePort
+                    .findAllByFilters(eventId, null, status, pageable)
+                    .map(ticketApplicationMapper::toResponse);
+        }
+
+        if ("SELLER".equalsIgnoreCase(userRole)) {
+            List<String> sellerEventIds = eventServicePort.getSellerEventIds(authenticatedUserId);
+            log.debug("SELLER '{}' owns {} events", authenticatedUserId, sellerEventIds.size());
+            return ticketPersistencePort
+                    .findByEventIdsIn(sellerEventIds, pageable)
+                    .map(ticketApplicationMapper::toResponse);
+        }
+
+        // USER: own tickets only
+        return ticketPersistencePort
+                .findAllByFilters(eventId, authenticatedUserId, status, pageable)
                 .map(ticketApplicationMapper::toResponse);
-
-        log.info("Retrieved {} tickets out of {} total", result.getNumberOfElements(), result.getTotalElements());
-        return result;
     }
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Throws {@link TicketNotFoundException} if the ticket does not exist.
-     * Throws {@link TicketAlreadyCancelledException} if the ticket is already cancelled.
-     * </p>
-     */
     @Override
-    public TicketResponse cancel(String id, String authenticatedUserId, String userEmail) {
-        log.info("Cancelling ticket with id: {}", id);
+    public TicketResponse cancel(String id, String authenticatedUserId, String userEmail, String userRole) {
+        RoleValidator.requireAnyRole(userRole, "USER", "ADMIN");
+        log.info("Cancelling ticket '{}'", id);
 
         Ticket ticket = ticketPersistencePort.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> {
-                    log.warn("Ticket cancellation failed - ticket with id '{}' not found", id);
+                    log.warn("Ticket '{}' not found for cancellation", id);
                     return new TicketNotFoundException(id);
                 });
 
-        if (!ticket.getUserId().equals(authenticatedUserId)) {
-            log.warn("Ticket cancellation forbidden - userId '{}' does not own ticket '{}'", authenticatedUserId, id);
+        if (!"ADMIN".equalsIgnoreCase(userRole) && !ticket.getUserId().equals(authenticatedUserId)) {
+            log.warn("userId '{}' does not own ticket '{}'", authenticatedUserId, id);
             throw new TicketOwnershipException(id);
         }
 
         if (ticket.getStatus() == TicketStatus.CANCELLED) {
-            log.warn("Ticket cancellation failed - ticket with id '{}' is already cancelled", id);
+            log.warn("Ticket '{}' is already cancelled", id);
             throw new TicketAlreadyCancelledException(id);
         }
 
         ticket.setStatus(TicketStatus.CANCELLED);
-        Ticket savedTicket = ticketPersistencePort.update(ticket);
+        Ticket saved = ticketPersistencePort.update(ticket);
+        ticketEventPublisher.publishTicketCancelled(saved.getId(), saved.getUserId(), userEmail);
 
-        ticketEventPublisher.publishTicketCancelled(savedTicket.getId(), savedTicket.getUserId(), userEmail);
-
-        log.info("Ticket cancelled successfully with id: {}", id);
-        return ticketApplicationMapper.toResponse(savedTicket);
+        log.info("Ticket '{}' cancelled successfully", id);
+        return ticketApplicationMapper.toResponse(saved);
     }
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Sets the {@code deleted} flag to {@code true} and persists the change.
-     * The record remains in the database and is excluded from active queries.
-     * Throws {@link TicketNotFoundException} if the ticket does not exist.
-     * </p>
-     */
     @Override
-    public void delete(String id, String authenticatedUserId) {
-        log.info("Soft-deleting ticket with id: {}", id);
+    public void delete(String id, String authenticatedUserId, String userRole) {
+        RoleValidator.requireAnyRole(userRole, "USER", "ADMIN");
+        log.info("Soft-deleting ticket '{}'", id);
 
         Ticket ticket = ticketPersistencePort.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> {
-                    log.warn("Ticket soft-delete failed - ticket with id '{}' not found", id);
+                    log.warn("Ticket '{}' not found for deletion", id);
                     return new TicketNotFoundException(id);
                 });
 
-        if (!ticket.getUserId().equals(authenticatedUserId)) {
-            log.warn("Ticket delete forbidden - userId '{}' does not own ticket '{}'", authenticatedUserId, id);
+        if (!"ADMIN".equalsIgnoreCase(userRole) && !ticket.getUserId().equals(authenticatedUserId)) {
+            log.warn("userId '{}' does not own ticket '{}'", authenticatedUserId, id);
             throw new TicketOwnershipException(id);
         }
 
         ticket.setDeleted(true);
         ticketPersistencePort.update(ticket);
-
-        log.info("Ticket soft-deleted successfully with id: {}", id);
+        log.info("Ticket '{}' soft-deleted successfully", id);
     }
 }

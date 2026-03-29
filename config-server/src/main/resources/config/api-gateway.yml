@@ -81,6 +81,15 @@ spring:
                   args:
                     name: userServiceCB
                     fallbackUri: forward:/fallback/auth
+            - id: user-management-service
+              uri: lb://user-service
+              predicates:
+                - Path=/api/v1/users/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: userServiceCB
+                    fallbackUri: forward:/fallback/auth
 
 jwt:
   secret: ticketflow-secret-key-must-be-at-least-32-chars-long!!
