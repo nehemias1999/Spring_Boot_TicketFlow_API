@@ -314,7 +314,33 @@ All sensitive values are injected via environment variables:
 
 ## Running the Service
 
-### Prerequisites
+### Option A — Docker Compose (recommended)
+
+```bash
+# From the repository root
+cp .env.example .env   # fill in secrets on first run
+docker-compose up -d
+```
+
+### Option B — Docker (standalone)
+
+```bash
+docker build -t ticketflow/user-service ./user-service
+docker run -p 8084:8084 \
+  -e DB_URL=jdbc:mysql://host.docker.internal:3306/ticketflow_users?createDatabaseIfNotExist=true\&useSSL=false\&serverTimezone=UTC\&allowPublicKeyRetrieval=true \
+  -e DB_USERNAME=ticketflow \
+  -e DB_PASSWORD=your-password \
+  -e RABBITMQ_HOST=host.docker.internal \
+  -e RABBITMQ_USERNAME=ticketflow \
+  -e RABBITMQ_PASSWORD=your-password \
+  -e JWT_SECRET=your-secret \
+  -e EUREKA_URL=http://host.docker.internal:8761/eureka/ \
+  ticketflow/user-service
+```
+
+### Option C — Maven (local development)
+
+#### Prerequisites
 
 - Java 21, Maven 3.9+
 - MySQL 8 on port `3306`

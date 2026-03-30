@@ -320,7 +320,33 @@ HikariCP defaults: `minimum-idle: 5`, `maximum-pool-size: 20`, `connection-timeo
 
 ## Running the Service
 
-### Prerequisites
+### Option A — Docker Compose (recommended)
+
+```bash
+# From the repository root
+cp .env.example .env   # fill in secrets on first run
+docker-compose up -d
+```
+
+### Option B — Docker (standalone)
+
+```bash
+docker build -t ticketflow/ticket-service ./ticket-service
+docker run -p 8082:8082 \
+  -e DB_URL=jdbc:mysql://host.docker.internal:3306/ticketflow_tickets?createDatabaseIfNotExist=true\&useSSL=false\&serverTimezone=UTC\&allowPublicKeyRetrieval=true \
+  -e DB_USERNAME=ticketflow \
+  -e DB_PASSWORD=your-password \
+  -e RABBITMQ_HOST=host.docker.internal \
+  -e RABBITMQ_USERNAME=ticketflow \
+  -e RABBITMQ_PASSWORD=your-password \
+  -e INTERNAL_API_KEY=your-internal-key \
+  -e EUREKA_URL=http://host.docker.internal:8761/eureka/ \
+  ticketflow/ticket-service
+```
+
+### Option C — Maven (local development)
+
+#### Prerequisites
 
 - Java 21, Maven 3.9+
 - MySQL 8 on port `3306`

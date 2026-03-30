@@ -124,7 +124,31 @@ management:
 
 ## Running the Service
 
-### Prerequisites
+### Option A — Docker Compose (recommended)
+
+The easiest way to run the full TicketFlow stack including this service:
+
+```bash
+# From the repository root
+cp .env.example .env   # fill in secrets on first run
+docker-compose up -d
+```
+
+Docker Compose builds the image automatically and starts all services in the correct dependency order.
+
+### Option B — Docker (standalone)
+
+```bash
+# Build the image
+docker build -t ticketflow/discovery-service ./discovery-service
+
+# Run the container
+docker run -p 8761:8761 ticketflow/discovery-service
+```
+
+### Option C — Maven (local development)
+
+#### Prerequisites
 
 - Java 21
 - Maven 3.9+

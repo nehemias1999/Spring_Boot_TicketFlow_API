@@ -188,7 +188,27 @@ The gateway's `application.yml` only declares the application name and config-se
 
 ## Running the Service
 
-### Prerequisites
+### Option A — Docker Compose (recommended)
+
+```bash
+# From the repository root
+cp .env.example .env   # fill in secrets on first run
+docker-compose up -d
+```
+
+### Option B — Docker (standalone)
+
+```bash
+docker build -t ticketflow/api-gateway ./api-gateway
+docker run -p 8080:8080 \
+  -e JWT_SECRET=your-secret \
+  -e EUREKA_URL=http://host.docker.internal:8761/eureka/ \
+  ticketflow/api-gateway
+```
+
+### Option C — Maven (local development)
+
+#### Prerequisites
 
 - Java 21, Maven 3.9+
 - `discovery-service` running at `localhost:8761`

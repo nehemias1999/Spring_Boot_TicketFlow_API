@@ -154,7 +154,26 @@ eureka:
 
 ## Running the Service
 
-### Prerequisites
+### Option A — Docker Compose (recommended)
+
+```bash
+# From the repository root
+cp .env.example .env   # fill in secrets on first run
+docker-compose up -d
+```
+
+### Option B — Docker (standalone)
+
+```bash
+docker build -t ticketflow/config-server ./config-server
+docker run -p 8088:8088 \
+  -e EUREKA_URL=http://host.docker.internal:8761/eureka/ \
+  ticketflow/config-server
+```
+
+### Option C — Maven (local development)
+
+#### Prerequisites
 
 - Java 21, Maven 3.9+
 - `discovery-service` running at `localhost:8761`

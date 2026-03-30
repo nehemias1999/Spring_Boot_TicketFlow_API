@@ -321,10 +321,13 @@ docker-compose up -d
 ```
 
 Docker Compose will:
-1. Start infrastructure first (MySQL, RabbitMQ, Zipkin, MailHog) and wait for their healthchecks
-2. Start `discovery-service` and `config-server`; wait for them to be healthy
-3. Start all business services (`user-service`, `event-service`, `ticket-service`, `notification-service`) once config-server is healthy
-4. Start `api-gateway` once `discovery-service` and `config-server` are healthy
+1. **Build** each Spring Boot service image using its `Dockerfile` (multi-stage: Maven build → JRE runtime)
+2. Start infrastructure first (MySQL, RabbitMQ, Zipkin, MailHog) and wait for their healthchecks
+3. Start `discovery-service` and `config-server`; wait for them to be healthy
+4. Start all business services (`user-service`, `event-service`, `ticket-service`, `notification-service`) once config-server is healthy
+5. Start `api-gateway` once `discovery-service` and `config-server` are healthy
+
+> **First run**: the initial build downloads Maven dependencies for each service and can take several minutes. Subsequent builds are fast thanks to Docker layer caching.
 
 ### 3. Verify everything is up
 
@@ -357,6 +360,9 @@ All services should show `Up` or `Up (healthy)`.
 # View logs for a specific service
 docker-compose logs -f ticket-service
 
+# Follow logs for all services at once
+docker-compose logs -f
+
 # Restart a single service (e.g. after a config change)
 docker-compose restart event-service
 
@@ -366,10 +372,23 @@ docker-compose down
 # Stop all services and remove volumes (resets the database)
 docker-compose down -v
 
-# Rebuild a service image after code changes
-docker-compose build ticket-service
-docker-compose up -d ticket-service
+# Rebuild a single service image after code changes and restart it
+docker-compose build ticket-service && docker-compose up -d ticket-service
+
+# Rebuild all images from scratch (no cache)
+docker-compose build --no-cache
 ```
+
+### How the Dockerfiles work
+
+Each service has a `Dockerfile` using a **multi-stage build**:
+
+| Stage | Base image | Purpose |
+|-------|-----------|---------|
+| `build` | `eclipse-temurin:21-jdk-alpine` | Runs `mvnw package -DskipTests` to produce the JAR |
+| runtime | `eclipse-temurin:21-jre-alpine` | Copies only the JAR; runs as a non-root user |
+
+This keeps the final image small (JRE only, no Maven/JDK) and avoids shipping build tools to production.
 
 ### Admin account
 

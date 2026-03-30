@@ -207,7 +207,33 @@ For production SMTP (e.g., SendGrid, SES), set `MAIL_HOST`, `MAIL_PORT`, `MAIL_U
 
 ## Running the Service
 
-### Prerequisites
+### Option A — Docker Compose (recommended)
+
+```bash
+# From the repository root
+cp .env.example .env   # fill in secrets on first run
+docker-compose up -d
+```
+
+### Option B — Docker (standalone)
+
+```bash
+docker build -t ticketflow/notification-service ./notification-service
+docker run -p 8083:8083 \
+  -e RABBITMQ_HOST=host.docker.internal \
+  -e RABBITMQ_USERNAME=ticketflow \
+  -e RABBITMQ_PASSWORD=your-password \
+  -e MAIL_HOST=host.docker.internal \
+  -e MAIL_PORT=1025 \
+  -e MAIL_SMTP_AUTH=false \
+  -e MAIL_SMTP_STARTTLS=false \
+  -e EUREKA_URL=http://host.docker.internal:8761/eureka/ \
+  ticketflow/notification-service
+```
+
+### Option C — Maven (local development)
+
+#### Prerequisites
 
 - Java 21, Maven 3.9+
 - RabbitMQ on port `5672`
