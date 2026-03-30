@@ -1,8 +1,10 @@
 package com.ticketflow.event_service.shared.infrastructure.exception;
 
 import com.ticketflow.event_service.catalog.domain.exception.AccessDeniedException;
+import com.ticketflow.event_service.catalog.domain.exception.EventFullException;
 import com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +31,39 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     private static final String CORRELATION_HEADER = "X-Correlation-Id";
+
+    @ExceptionHandler(EventFullException.class)
+    public ResponseEntity<ApiErrorResponse> handleEventFullException(
+            EventFullException ex, HttpServletRequest request) {
+        log.warn("Event full on request to '{}': {}", request.getRequestURI(), ex.getMessage());
+        ApiErrorResponse errorResponse = new ApiErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.CONFLICT.value(),
+                HttpStatus.CONFLICT.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleConstraintViolationException(
+            ConstraintViolationException ex, HttpServletRequest request) {
+        log.warn("Constraint violation on request to '{}': {}", request.getRequestURI(), ex.getMessage());
+        String message = ex.getConstraintViolations().stream()
+                .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                .collect(Collectors.joining(", "));
+        ApiErrorResponse errorResponse = new ApiErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                message,
+                request.getRequestURI(),
+                request.getHeader(CORRELATION_HEADER)
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiErrorResponse> handleAccessDeniedException(

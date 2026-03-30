@@ -5,12 +5,14 @@ import com.ticketflow.event_service.catalog.application.dto.request.CreateEventR
 import com.ticketflow.event_service.catalog.application.dto.request.UpdateEventRequest;
 import com.ticketflow.event_service.catalog.application.mapper.IEventApplicationMapper;
 import com.ticketflow.event_service.catalog.domain.exception.AccessDeniedException;
+import com.ticketflow.event_service.catalog.domain.exception.EventFullException;
 import com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException;
 import com.ticketflow.event_service.catalog.domain.model.Event;
 import com.ticketflow.event_service.catalog.domain.port.in.IEventService;
 import com.ticketflow.event_service.catalog.domain.port.out.IEventPersistencePort;
 import com.ticketflow.event_service.shared.infrastructure.security.RoleValidator;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,12 +29,26 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 @Transactional
 public class EventService implements IEventService {
 
     private final IEventPersistencePort eventPersistencePort;
     private final IEventApplicationMapper eventApplicationMapper;
+    private final Counter eventsCreatedCounter;
+    private final Counter eventsDeletedCounter;
+
+    public EventService(IEventPersistencePort eventPersistencePort,
+                        IEventApplicationMapper eventApplicationMapper,
+                        MeterRegistry meterRegistry) {
+        this.eventPersistencePort = eventPersistencePort;
+        this.eventApplicationMapper = eventApplicationMapper;
+        this.eventsCreatedCounter = Counter.builder("events.created")
+                .description("Total number of events created")
+                .register(meterRegistry);
+        this.eventsDeletedCounter = Counter.builder("events.deleted")
+                .description("Total number of events soft-deleted")
+                .register(meterRegistry);
+    }
 
     @Override
     public EventResponse create(CreateEventRequest request, String creatorId, String role) {
@@ -44,8 +60,10 @@ public class EventService implements IEventService {
         Event event = eventApplicationMapper.toDomain(request);
         event.setId(id);
         event.setCreatorId("ADMIN".equalsIgnoreCase(role) ? null : creatorId);
+        event.setAvailableTickets(request.capacity());
 
         Event savedEvent = eventPersistencePort.save(event);
+        eventsCreatedCounter.increment();
         log.info("Event created successfully with id: {}", savedEvent.getId());
         return eventApplicationMapper.toResponse(savedEvent);
     }
@@ -114,6 +132,7 @@ public class EventService implements IEventService {
 
         event.setDeleted(true);
         eventPersistencePort.update(event);
+        eventsDeletedCounter.increment();
         log.info("Event '{}' soft-deleted successfully", id);
     }
 
@@ -130,5 +149,32 @@ public class EventService implements IEventService {
     public List<String> getMyEventIds(String creatorId) {
         log.debug("Retrieving event IDs for creatorId: {}", creatorId);
         return eventPersistencePort.findIdsByCreatorIdAndDeletedFalse(creatorId);
+    }
+
+    @Override
+    public EventResponse decrementAvailableTickets(String eventId) {
+        Event event = eventPersistencePort.findByIdAndDeletedFalse(eventId)
+                .orElseThrow(() -> new EventNotFoundException(eventId));
+
+        if (event.getAvailableTickets() <= 0) {
+            log.warn("Event '{}' has no available tickets", eventId);
+            throw new EventFullException(eventId);
+        }
+
+        event.setAvailableTickets(event.getAvailableTickets() - 1);
+        Event saved = eventPersistencePort.update(event);
+        log.info("Decremented available tickets for event '{}', now: {}", eventId, saved.getAvailableTickets());
+        return eventApplicationMapper.toResponse(saved);
+    }
+
+    @Override
+    public EventResponse incrementAvailableTickets(String eventId) {
+        Event event = eventPersistencePort.findByIdAndDeletedFalse(eventId)
+                .orElseThrow(() -> new EventNotFoundException(eventId));
+
+        event.setAvailableTickets(event.getAvailableTickets() + 1);
+        Event saved = eventPersistencePort.update(event);
+        log.info("Incremented available tickets for event '{}', now: {}", eventId, saved.getAvailableTickets());
+        return eventApplicationMapper.toResponse(saved);
     }
 }

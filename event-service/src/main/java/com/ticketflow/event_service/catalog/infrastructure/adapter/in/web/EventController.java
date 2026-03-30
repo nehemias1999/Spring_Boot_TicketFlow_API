@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -17,8 +19,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -35,26 +39,16 @@ import java.util.List;
  * <p>
  * Base path: {@code /api/v1/events}
  * </p>
- * Role enforcement:
- * <ul>
- *   <li>POST: SELLER, ADMIN</li>
- *   <li>GET, GET/{id}: all authenticated users</li>
- *   <li>PUT/{id}: SELLER (own events), ADMIN</li>
- *   <li>DELETE/{id}: SELLER (own events), ADMIN</li>
- *   <li>GET /my: SELLER, ADMIN</li>
- *   <li>GET /my-event-ids: internal use by ticket-service (no role check needed)</li>
- * </ul>
  *
  * @author TicketFlow Team
  */
 @Slf4j
+@Validated
 @RestController
 @RequestMapping("/api/v1/events")
 @RequiredArgsConstructor
 @Tag(name = "Events", description = "Event management endpoints")
 public class EventController {
-
-    private static final int MAX_PAGE_SIZE = 100;
 
     private final IEventService eventServicePort;
 
@@ -90,13 +84,12 @@ public class EventController {
     @ApiResponse(responseCode = "200", description = "Paginated list of events")
     @GetMapping
     public ResponseEntity<Page<EventResponse>> getAll(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size,
             @RequestParam(required = false) String title,
             @RequestParam(required = false) String location,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
-        size = Math.min(size, MAX_PAGE_SIZE);
         Sort sort = "asc".equalsIgnoreCase(sortDir)
                 ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
@@ -147,13 +140,12 @@ public class EventController {
     public ResponseEntity<Page<EventResponse>> getMyEvents(
             @RequestHeader("X-User-Id") String userId,
             @RequestHeader("X-User-Role") String userRole,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
         com.ticketflow.event_service.shared.infrastructure.security.RoleValidator
                 .requireAnyRole(userRole, "SELLER", "ADMIN");
-        size = Math.min(size, MAX_PAGE_SIZE);
         Sort sort = "asc".equalsIgnoreCase(sortDir)
                 ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
@@ -168,5 +160,25 @@ public class EventController {
             @RequestHeader("X-User-Id") String userId) {
         log.debug("GET /api/v1/events/my-event-ids - userId: {}", userId);
         return ResponseEntity.ok(eventServicePort.getMyEventIds(userId));
+    }
+
+    @Operation(summary = "Decrement available tickets for an event (internal use by ticket-service)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Available tickets decremented"),
+            @ApiResponse(responseCode = "404", description = "Event not found"),
+            @ApiResponse(responseCode = "409", description = "Event has no available tickets")
+    })
+    @PatchMapping("/{id}/decrement-tickets")
+    public ResponseEntity<EventResponse> decrementTickets(@PathVariable String id) {
+        log.debug("PATCH /api/v1/events/{}/decrement-tickets", id);
+        return ResponseEntity.ok(eventServicePort.decrementAvailableTickets(id));
+    }
+
+    @Operation(summary = "Increment available tickets for an event (internal use by ticket-service)")
+    @ApiResponse(responseCode = "200", description = "Available tickets incremented")
+    @PatchMapping("/{id}/increment-tickets")
+    public ResponseEntity<EventResponse> incrementTickets(@PathVariable String id) {
+        log.debug("PATCH /api/v1/events/{}/increment-tickets", id);
+        return ResponseEntity.ok(eventServicePort.incrementAvailableTickets(id));
     }
 }

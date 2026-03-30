@@ -1,7 +1,9 @@
 package com.ticketflow.ticket_service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticketflow.ticket_service.booking.application.dto.external.EventDto;
 import com.ticketflow.ticket_service.booking.application.dto.request.CreateTicketRequest;
+import com.ticketflow.ticket_service.booking.domain.port.out.IEventServicePort;
 import com.ticketflow.ticket_service.booking.domain.port.out.ITicketEventPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +17,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -39,9 +47,14 @@ class TicketIntegrationTest {
 
     private static final String USER_ID = "user-001";
     private static final String USER_EMAIL = "user@test.com";
+    private static final String USER_ROLE = "USER";
+    private static final String EVENT_ID = "550e8400-e29b-41d4-a716-446655440000";
 
     @MockBean
     private ITicketEventPublisher ticketEventPublisher;
+
+    @MockBean
+    private IEventServicePort eventServicePort;
 
     @Autowired
     private MockMvc mockMvc;
@@ -50,22 +63,33 @@ class TicketIntegrationTest {
     private ObjectMapper objectMapper;
 
     private static CreateTicketRequest buildCreateRequest() {
-        return new CreateTicketRequest("550e8400-e29b-41d4-a716-446655440000");
+        return new CreateTicketRequest(EVENT_ID);
+    }
+
+    private void stubEventServiceForCreate() {
+        EventDto eventDto = new EventDto(EVENT_ID, "Test Event", "Description",
+                LocalDateTime.of(2027, 1, 1, 12, 0), "Test Location",
+                BigDecimal.valueOf(100.00), 500, 100, null, LocalDateTime.now(), null);
+        when(eventServicePort.getEventById(EVENT_ID)).thenReturn(eventDto);
+        doNothing().when(eventServicePort).decrementAvailableTickets(EVENT_ID);
+        doNothing().when(eventServicePort).incrementAvailableTickets(anyString());
     }
 
     @Test
     @DisplayName("should purchase a ticket and return 201 with a server-generated UUID id")
     void create_returnsCreatedWithUuid() throws Exception {
+        stubEventServiceForCreate();
         CreateTicketRequest request = buildCreateRequest();
 
         mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-Id", USER_ID)
                         .header("X-User-Email", USER_EMAIL)
+                        .header("X-User-Role", USER_ROLE)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNotEmpty())
-                .andExpect(jsonPath("$.eventId").value("550e8400-e29b-41d4-a716-446655440000"))
+                .andExpect(jsonPath("$.eventId").value(EVENT_ID))
                 .andExpect(jsonPath("$.userId").value(USER_ID))
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
                 .andExpect(jsonPath("$.createdAt").isNotEmpty());
@@ -74,20 +98,22 @@ class TicketIntegrationTest {
     @Test
     @DisplayName("should purchase a ticket and retrieve it by the returned ID")
     void createAndGetById_success() throws Exception {
-        // Purchase
+        stubEventServiceForCreate();
+
         MvcResult createResult = mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-Id", USER_ID)
                         .header("X-User-Email", USER_EMAIL)
+                        .header("X-User-Role", USER_ROLE)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated())
                 .andReturn();
 
         String id = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText();
 
-        // Get by ID
         mockMvc.perform(get("/api/v1/tickets/{id}", id)
-                        .header("X-User-Id", USER_ID))
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Role", USER_ROLE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.userId").value(USER_ID));
@@ -96,15 +122,19 @@ class TicketIntegrationTest {
     @Test
     @DisplayName("should purchase a ticket and list it in the paginated response for the authenticated user")
     void createAndGetAll_returnsInPage() throws Exception {
+        stubEventServiceForCreate();
+
         mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-Id", USER_ID)
                         .header("X-User-Email", USER_EMAIL)
+                        .header("X-User-Role", USER_ROLE)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(get("/api/v1/tickets")
-                        .header("X-User-Id", USER_ID))
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Role", USER_ROLE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].userId").value(USER_ID));
@@ -113,21 +143,23 @@ class TicketIntegrationTest {
     @Test
     @DisplayName("should cancel a confirmed ticket and return CANCELLED status")
     void createAndCancel_success() throws Exception {
-        // Purchase
+        stubEventServiceForCreate();
+
         MvcResult createResult = mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-Id", USER_ID)
                         .header("X-User-Email", USER_EMAIL)
+                        .header("X-User-Role", USER_ROLE)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated())
                 .andReturn();
 
         String id = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText();
 
-        // Cancel
         mockMvc.perform(patch("/api/v1/tickets/{id}/cancel", id)
                         .header("X-User-Id", USER_ID)
-                        .header("X-User-Email", USER_EMAIL))
+                        .header("X-User-Email", USER_EMAIL)
+                        .header("X-User-Role", USER_ROLE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
@@ -136,11 +168,13 @@ class TicketIntegrationTest {
     @Test
     @DisplayName("should return 409 when cancelling an already-cancelled ticket")
     void cancelAlreadyCancelled_returns409() throws Exception {
-        // Purchase
+        stubEventServiceForCreate();
+
         MvcResult createResult = mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-Id", USER_ID)
                         .header("X-User-Email", USER_EMAIL)
+                        .header("X-User-Role", USER_ROLE)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated())
                 .andReturn();
@@ -150,13 +184,15 @@ class TicketIntegrationTest {
         // First cancel
         mockMvc.perform(patch("/api/v1/tickets/{id}/cancel", id)
                         .header("X-User-Id", USER_ID)
-                        .header("X-User-Email", USER_EMAIL))
+                        .header("X-User-Email", USER_EMAIL)
+                        .header("X-User-Role", USER_ROLE))
                 .andExpect(status().isOk());
 
         // Second cancel — should conflict
         mockMvc.perform(patch("/api/v1/tickets/{id}/cancel", id)
                         .header("X-User-Id", USER_ID)
-                        .header("X-User-Email", USER_EMAIL))
+                        .header("X-User-Email", USER_EMAIL)
+                        .header("X-User-Role", USER_ROLE))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409));
     }
@@ -164,25 +200,27 @@ class TicketIntegrationTest {
     @Test
     @DisplayName("should soft-delete a ticket and return 404 on subsequent retrieval")
     void createAndDelete_notFoundAfterDeletion() throws Exception {
-        // Purchase
+        stubEventServiceForCreate();
+
         MvcResult createResult = mockMvc.perform(post("/api/v1/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-Id", USER_ID)
                         .header("X-User-Email", USER_EMAIL)
+                        .header("X-User-Role", USER_ROLE)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated())
                 .andReturn();
 
         String id = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText();
 
-        // Delete
         mockMvc.perform(delete("/api/v1/tickets/{id}", id)
-                        .header("X-User-Id", USER_ID))
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Role", USER_ROLE))
                 .andExpect(status().isNoContent());
 
-        // Get by ID — should be 404 now (deleted record is excluded from active queries)
         mockMvc.perform(get("/api/v1/tickets/{id}", id)
-                        .header("X-User-Id", USER_ID))
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Role", USER_ROLE))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
     }
@@ -191,7 +229,8 @@ class TicketIntegrationTest {
     @DisplayName("should return 404 when getting a non-existent ticket")
     void getById_nonExistent_returns404() throws Exception {
         mockMvc.perform(get("/api/v1/tickets/non-existent-id")
-                        .header("X-User-Id", USER_ID))
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Role", USER_ROLE))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
     }
@@ -209,6 +248,7 @@ class TicketIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-Id", USER_ID)
                         .header("X-User-Email", USER_EMAIL)
+                        .header("X-User-Role", USER_ROLE)
                         .content(invalidBody))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));

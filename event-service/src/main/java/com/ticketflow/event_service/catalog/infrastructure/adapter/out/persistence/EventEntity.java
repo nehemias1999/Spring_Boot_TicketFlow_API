@@ -57,10 +57,22 @@ public class EventEntity {
     private String description;
 
     /**
-     * Date and time of the event as a string.
+     * Date and time of the event.
      */
     @Column(name = "date", nullable = false)
-    private String date;
+    private LocalDateTime date;
+
+    /**
+     * Maximum number of tickets for this event.
+     */
+    @Column(name = "capacity", nullable = false)
+    private int capacity;
+
+    /**
+     * Current available tickets for purchase.
+     */
+    @Column(name = "available_tickets", nullable = false)
+    private int availableTickets;
 
     /**
      * Venue or location of the event.

@@ -1,7 +1,9 @@
 package com.ticketflow.user_service.auth.application.service;
 
+import com.ticketflow.user_service.auth.application.dto.request.ChangePasswordRequest;
 import com.ticketflow.user_service.auth.application.dto.request.LoginRequest;
 import com.ticketflow.user_service.auth.application.dto.request.RegisterRequest;
+import com.ticketflow.user_service.auth.application.dto.request.UpdateProfileRequest;
 import com.ticketflow.user_service.auth.application.dto.response.AuthResponse;
 import com.ticketflow.user_service.auth.application.dto.response.UserResponse;
 import com.ticketflow.user_service.auth.application.mapper.IUserApplicationMapper;
@@ -23,6 +25,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.UUID;
 
@@ -69,7 +73,19 @@ public class UserService implements IUserService {
                 savedUser.getId(), savedUser.getUsername(),
                 savedUser.getEmail(), savedUser.getRole().name());
 
-        userEventPublisher.publishUserRegistered(savedUser.getId(), savedUser.getEmail());
+        // Publish after commit so a messaging failure never rolls back the registration
+        final String newUserId    = savedUser.getId();
+        final String newUserEmail = savedUser.getEmail();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    userEventPublisher.publishUserRegistered(newUserId, newUserEmail);
+                } catch (Exception e) {
+                    log.warn("Failed to publish UserRegisteredEvent for user '{}': {}", newUserId, e.getMessage());
+                }
+            }
+        });
 
         log.info("User registered successfully with id: {}", savedUser.getId());
         return new AuthResponse(token, savedUser.getId(), savedUser.getUsername(),
@@ -150,6 +166,60 @@ public class UserService implements IUserService {
 
         log.info("Role of user '{}' updated to '{}'", id, targetRole);
         return userApplicationMapper.toResponse(updated);
+    }
+
+    @Override
+    public UserResponse updateProfile(String id, UpdateProfileRequest request,
+                                      String requestingUserId, String requestingUserRole) {
+        log.info("Updating profile of user '{}'", id);
+
+        boolean isPrivileged = "ADMIN".equalsIgnoreCase(requestingUserRole)
+                || "MODERATOR".equalsIgnoreCase(requestingUserRole);
+
+        if (!isPrivileged && !id.equals(requestingUserId)) {
+            throw new AccessDeniedException("You can only update your own profile");
+        }
+
+        User user = userPersistencePort.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new UserNotFoundException(id));
+
+        // Check new username/email not taken by another user
+        if (!user.getUsername().equals(request.username())
+                && userPersistencePort.existsByUsername(request.username())) {
+            throw new UserAlreadyExistsException("username: " + request.username());
+        }
+        if (!user.getEmail().equals(request.email())
+                && userPersistencePort.existsByEmail(request.email())) {
+            throw new UserAlreadyExistsException(request.email());
+        }
+
+        user.setUsername(request.username());
+        user.setEmail(request.email());
+        User updated = userPersistencePort.update(user);
+
+        log.info("Profile of user '{}' updated successfully", id);
+        return userApplicationMapper.toResponse(updated);
+    }
+
+    @Override
+    public void changePassword(String id, ChangePasswordRequest request, String requestingUserId) {
+        log.info("Changing password of user '{}'", id);
+
+        if (!id.equals(requestingUserId)) {
+            throw new AccessDeniedException("You can only change your own password");
+        }
+
+        User user = userPersistencePort.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new UserNotFoundException(id));
+
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+            log.warn("Password change failed - current password incorrect for user '{}'", id);
+            throw new InvalidCredentialsException();
+        }
+
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        userPersistencePort.update(user);
+        log.info("Password of user '{}' changed successfully", id);
     }
 
     private User resolveUserByIdentifier(String identifier) {

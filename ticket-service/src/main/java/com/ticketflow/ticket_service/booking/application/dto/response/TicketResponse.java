@@ -2,6 +2,7 @@ package com.ticketflow.ticket_service.booking.application.dto.response;
 
 import com.ticketflow.ticket_service.booking.domain.model.TicketStatus;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -12,6 +13,7 @@ import java.time.LocalDateTime;
  * @param userId       the user who owns this ticket
  * @param purchaseDate the date and time the ticket was purchased
  * @param status       the current lifecycle status of the ticket
+ * @param price        the price paid at time of purchase
  * @param createdAt    the timestamp when this record was created
  * @param updatedAt    the timestamp when this record was last updated
  * @author TicketFlow Team
@@ -22,6 +24,7 @@ public record TicketResponse(
         String userId,
         LocalDateTime purchaseDate,
         TicketStatus status,
+        BigDecimal price,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

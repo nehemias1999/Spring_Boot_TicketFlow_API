@@ -1,0 +1,218 @@
+version: "3.9"
+
+# -------------------------------------------------------
+# TicketFlow — full local stack
+#
+# Infrastructure services always start first.
+# Spring Boot services wait for them via healthchecks.
+#
+# Usage:
+#   1. Copy .env.example to .env and fill in the values.
+#   2. docker-compose up -d
+# -------------------------------------------------------
+
+x-common-env: &common-env
+  EUREKA_URL:           http://discovery-service:8761/eureka/
+  ZIPKIN_ENDPOINT:      http://zipkin:9411/api/v2/spans
+  DB_USERNAME:          ${DB_USERNAME:-ticketflow}
+  DB_PASSWORD:          ${DB_PASSWORD:-ticketflow}
+  RABBITMQ_HOST:        rabbitmq
+  RABBITMQ_PORT:        "5672"
+  RABBITMQ_USERNAME:    ${RABBITMQ_USERNAME:-ticketflow}
+  RABBITMQ_PASSWORD:    ${RABBITMQ_PASSWORD:-ticketflow}
+  JWT_SECRET:           ${JWT_SECRET}
+  INTERNAL_API_KEY:     ${INTERNAL_API_KEY}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+  SHOW_SQL:             "false"
+  MANAGEMENT_ENDPOINTS_INCLUDE: health,info
+
+# -------------------------------------------------------
+# Infrastructure
+# -------------------------------------------------------
+
+services:
+
+  mysql:
+    image: mysql:8.4
+    container_name: ticketflow-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_USER:          ${DB_USERNAME:-ticketflow}
+      MYSQL_PASSWORD:      ${DB_PASSWORD:-ticketflow}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "--password=${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: ticketflow-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-ticketflow}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-ticketflow}
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  zipkin:
+    image: openzipkin/zipkin:3
+    container_name: ticketflow-zipkin
+    restart: unless-stopped
+    ports:
+      - "9411:9411"
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: ticketflow-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+
+# -------------------------------------------------------
+# Spring Boot services
+# -------------------------------------------------------
+
+  discovery-service:
+    build:
+      context: ./discovery-service
+      dockerfile: Dockerfile
+    container_name: ticketflow-discovery
+    restart: unless-stopped
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  config-server:
+    build:
+      context: ./config-server
+      dockerfile: Dockerfile
+    container_name: ticketflow-config
+    restart: unless-stopped
+    environment:
+      EUREKA_URL: http://discovery-service:8761/eureka/
+    ports:
+      - "8088:8088"
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: ticketflow-user
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      DB_URL: jdbc:mysql://mysql:3306/ticketflow_users?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    ports:
+      - "8084:8084"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+  event-service:
+    build:
+      context: ./event-service
+      dockerfile: Dockerfile
+    container_name: ticketflow-event
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      DB_URL: jdbc:mysql://mysql:3306/ticketflow_events?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    ports:
+      - "8081:8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+  ticket-service:
+    build:
+      context: ./ticket-service
+      dockerfile: Dockerfile
+    container_name: ticketflow-ticket
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      DB_URL: jdbc:mysql://mysql:3306/ticketflow_tickets?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    ports:
+      - "8082:8082"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: ticketflow-notification
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      MAIL_HOST:         mailhog
+      MAIL_PORT:         "1025"
+      MAIL_SMTP_AUTH:    "false"
+      MAIL_SMTP_STARTTLS: "false"
+    ports:
+      - "8083:8083"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: ticketflow-gateway
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+    ports:
+      - "8080:8080"
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+# -------------------------------------------------------
+# Volumes
+# -------------------------------------------------------
+
+volumes:
+  mysql_data:

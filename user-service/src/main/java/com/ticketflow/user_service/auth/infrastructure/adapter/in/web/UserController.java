@@ -1,5 +1,7 @@
 package com.ticketflow.user_service.auth.infrastructure.adapter.in.web;
 
+import com.ticketflow.user_service.auth.application.dto.request.ChangePasswordRequest;
+import com.ticketflow.user_service.auth.application.dto.request.UpdateProfileRequest;
 import com.ticketflow.user_service.auth.application.dto.request.UpdateRoleRequest;
 import com.ticketflow.user_service.auth.application.dto.response.UserResponse;
 import com.ticketflow.user_service.auth.domain.port.in.IUserService;
@@ -18,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -113,5 +116,41 @@ public class UserController {
                 id, request.role(), requestingUserRole);
         UserResponse response = userServicePort.updateUserRole(id, request.role(), requestingUserRole);
         return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Update user profile (own profile or ADMIN)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Profile updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request body"),
+            @ApiResponse(responseCode = "403", description = "Insufficient permissions"),
+            @ApiResponse(responseCode = "404", description = "User not found"),
+            @ApiResponse(responseCode = "409", description = "Username or email already taken")
+    })
+    @PutMapping("/{id}")
+    public ResponseEntity<UserResponse> updateProfile(
+            @PathVariable String id,
+            @Valid @RequestBody UpdateProfileRequest request,
+            @RequestHeader("X-User-Id") String requestingUserId,
+            @RequestHeader("X-User-Role") String requestingUserRole) {
+        log.info("PUT /api/v1/users/{} - requestedBy: {}", id, requestingUserId);
+        UserResponse response = userServicePort.updateProfile(id, request, requestingUserId, requestingUserRole);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Change user password (own account only)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Password changed successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request or wrong current password"),
+            @ApiResponse(responseCode = "403", description = "Cannot change another user's password"),
+            @ApiResponse(responseCode = "404", description = "User not found")
+    })
+    @PutMapping("/{id}/password")
+    public ResponseEntity<Void> changePassword(
+            @PathVariable String id,
+            @Valid @RequestBody ChangePasswordRequest request,
+            @RequestHeader("X-User-Id") String requestingUserId) {
+        log.info("PUT /api/v1/users/{}/password - requestedBy: {}", id, requestingUserId);
+        userServicePort.changePassword(id, request, requestingUserId);
+        return ResponseEntity.noContent().build();
     }
 }

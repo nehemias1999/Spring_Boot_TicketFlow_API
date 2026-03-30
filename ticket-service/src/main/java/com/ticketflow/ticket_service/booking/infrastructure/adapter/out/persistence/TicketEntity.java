@@ -17,6 +17,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -70,6 +71,12 @@ public class TicketEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private TicketStatus status;
+
+    /**
+     * Price paid at the time of purchase. Nullable for tickets created before this feature.
+     */
+    @Column(name = "price", precision = 12, scale = 2)
+    private BigDecimal price;
 
     /**
      * Soft-delete flag. {@code true} means the record is logically deleted.

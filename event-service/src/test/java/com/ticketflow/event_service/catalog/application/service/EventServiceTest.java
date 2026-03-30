@@ -7,11 +7,12 @@ import com.ticketflow.event_service.catalog.application.mapper.IEventApplication
 import com.ticketflow.event_service.catalog.domain.exception.EventNotFoundException;
 import com.ticketflow.event_service.catalog.domain.model.Event;
 import com.ticketflow.event_service.catalog.domain.port.out.IEventPersistencePort;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -49,8 +50,12 @@ class EventServiceTest {
     @Mock
     private IEventApplicationMapper eventApplicationMapper;
 
-    @InjectMocks
     private EventService eventService;
+
+    @BeforeEach
+    void setUp() {
+        eventService = new EventService(eventPersistencePort, eventApplicationMapper, new SimpleMeterRegistry());
+    }
 
     // -------------------------------------------------------------------------
     // Helpers
@@ -61,7 +66,9 @@ class EventServiceTest {
                 .id(id)
                 .title("Test Event")
                 .description("Test description")
-                .date("2026-10-15 20:00")
+                .date(LocalDateTime.of(2026, 10, 15, 20, 0))
+                .capacity(100)
+                .availableTickets(100)
                 .location("Test Location")
                 .basePrice(BigDecimal.valueOf(100.00))
                 .deleted(false)
@@ -71,18 +78,20 @@ class EventServiceTest {
 
     private static EventResponse buildResponse(String id) {
         return new EventResponse(id, "Test Event", "Test description",
-                "2026-10-15 20:00", "Test Location",
-                BigDecimal.valueOf(100.00), LocalDateTime.now(), null);
+                LocalDateTime.of(2026, 10, 15, 20, 0), "Test Location",
+                BigDecimal.valueOf(100.00), 100, 100, null, LocalDateTime.now(), null);
     }
 
     private static CreateEventRequest buildCreateRequest() {
         return new CreateEventRequest("Test Event", "Test description",
-                "2026-10-15 20:00", "Test Location", BigDecimal.valueOf(100.00));
+                LocalDateTime.of(2027, 1, 1, 12, 0), "Test Location",
+                BigDecimal.valueOf(100.00), 100);
     }
 
     private static UpdateEventRequest buildUpdateRequest() {
         return new UpdateEventRequest("Updated Title", "Updated description",
-                "2026-11-20 18:00", "Updated Location", BigDecimal.valueOf(150.00));
+                LocalDateTime.of(2027, 11, 20, 18, 0), "Updated Location",
+                BigDecimal.valueOf(150.00), 200);
     }
 
     // -------------------------------------------------------------------------
@@ -106,7 +115,7 @@ class EventServiceTest {
             when(eventApplicationMapper.toResponse(domain)).thenReturn(response);
 
             // when
-            EventResponse result = eventService.create(request);
+            EventResponse result = eventService.create(request, "user-1", "SELLER");
 
             // then
             assertThat(result).isEqualTo(response);
@@ -231,6 +240,7 @@ class EventServiceTest {
             // given
             UpdateEventRequest request = buildUpdateRequest();
             Event existing = buildEvent("EVT-001");
+            existing.setCreatorId("user-1");
             EventResponse response = buildResponse("EVT-001");
 
             when(eventPersistencePort.findByIdAndDeletedFalse("EVT-001"))
@@ -240,7 +250,7 @@ class EventServiceTest {
             when(eventApplicationMapper.toResponse(existing)).thenReturn(response);
 
             // when
-            EventResponse result = eventService.update("EVT-001", request);
+            EventResponse result = eventService.update("EVT-001", request, "user-1", "SELLER");
 
             // then
             assertThat(result).isEqualTo(response);
@@ -257,7 +267,7 @@ class EventServiceTest {
                     .thenReturn(Optional.empty());
 
             // when / then
-            assertThatThrownBy(() -> eventService.update("EVT-999", request))
+            assertThatThrownBy(() -> eventService.update("EVT-999", request, "user-1", "SELLER"))
                     .isInstanceOf(EventNotFoundException.class)
                     .hasMessageContaining("EVT-999");
 
@@ -278,11 +288,12 @@ class EventServiceTest {
         void delete_success() {
             // given
             Event existing = buildEvent("EVT-001");
+            existing.setCreatorId("user-1");
             when(eventPersistencePort.findByIdAndDeletedFalse("EVT-001"))
                     .thenReturn(Optional.of(existing));
 
             // when
-            eventService.delete("EVT-001");
+            eventService.delete("EVT-001", "user-1", "SELLER");
 
             // then
             assertThat(existing.isDeleted()).isTrue();
@@ -297,7 +308,7 @@ class EventServiceTest {
                     .thenReturn(Optional.empty());
 
             // when / then
-            assertThatThrownBy(() -> eventService.delete("EVT-999"))
+            assertThatThrownBy(() -> eventService.delete("EVT-999", "user-1", "SELLER"))
                     .isInstanceOf(EventNotFoundException.class)
                     .hasMessageContaining("EVT-999");
 

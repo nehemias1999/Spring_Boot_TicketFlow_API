@@ -26,7 +26,9 @@ Centralized configuration server for the **TicketFlow** ticket reservation syste
 
 `config-server` is a **Spring Cloud Config Server** running in `native` profile mode, which means it reads configuration files directly from the classpath (`src/main/resources/config/`) rather than from a Git repository. Each microservice fetches its own configuration from this server on startup using its `spring.application.name` as the lookup key.
 
-The server also registers itself with the Eureka discovery service so that clients can locate it by name (`config-server`) instead of a hardcoded URL.
+All sensitive values in the config files (JWT secret, database credentials, internal API key, RabbitMQ credentials, mail settings) reference environment variables. This way the config files can be committed to version control without exposing secrets.
+
+The server also registers itself with the Eureka discovery service so that clients can locate it by name instead of a hardcoded URL.
 
 ---
 
@@ -41,12 +43,14 @@ The server also registers itself with the Eureka discovery service so that clien
 │   src/main/resources/config/                                  │
 │   ├── api-gateway.yml                                         │
 │   ├── event-service.yml                                       │
-│   └── ticket-service.yml                                      │
-└────────┬──────────────┬──────────────┬────────────────────────┘
-         │ fetches      │ fetches      │ fetches
-         ▼              ▼              ▼
-    api-gateway    event-service  ticket-service
-    (on startup)   (on startup)   (on startup)
+│   ├── ticket-service.yml                                      │
+│   ├── user-service.yml                                        │
+│   └── notification-service.yml                                │
+└────┬──────────┬──────────┬──────────┬───────────┬────────────┘
+     │ fetches  │ fetches  │ fetches  │ fetches   │ fetches
+     ▼          ▼          ▼          ▼           ▼
+api-gateway event-service ticket-service user-service notification-service
+(on startup) (on startup) (on startup)  (on startup) (on startup)
 ```
 
 **Startup order** — the config-server should start after the discovery-service and before any business microservice, since those services fetch their configuration on boot.
@@ -74,66 +78,47 @@ The server also registers itself with the Eureka discovery service so that clien
 
 ## Managed Configurations
 
-Each file under `src/main/resources/config/` maps to a microservice by its application name.
-
-### `event-service.yml`
-
-| Property | Value | Description |
-|----------|-------|-------------|
-| `server.port` | `8081` | HTTP port for the event-service |
-| `eureka.client.serviceUrl.defaultZone` | `http://localhost:8761/eureka/` | Eureka registration URL |
-| `eureka.instance.prefer-ip-address` | `true` | Register by IP instead of hostname |
-| `management.endpoints.web.exposure.include` | `health, info, metrics, refresh` | Exposed Actuator endpoints |
-
-### `ticket-service.yml`
-
-| Property | Value | Description |
-|----------|-------|-------------|
-| `server.port` | `8082` | HTTP port for the ticket-service |
-| `eureka.client.serviceUrl.defaultZone` | `http://localhost:8761/eureka/` | Eureka registration URL |
-| `eureka.instance.prefer-ip-address` | `true` | Register by IP instead of hostname |
-| `management.endpoints.web.exposure.include` | `health, info, metrics, refresh` | Exposed Actuator endpoints |
+Each file under `src/main/resources/config/` maps to a microservice by its application name. Sensitive values are templated as `${ENV_VAR:default}`.
 
 ### `api-gateway.yml`
 
-| Property | Value | Description |
-|----------|-------|-------------|
-| `server.port` | `8080` | HTTP port for the api-gateway |
-| `spring.cloud.gateway.server.webflux.routes` | see below | Route definitions |
-| `spring.cloud.gateway.globalcors` | `*` origins, all methods | Global CORS policy |
-| `resilience4j.circuitbreaker.instances.eventServiceCB` | 50% threshold, 10s open | Circuit breaker for event-service |
-| `resilience4j.circuitbreaker.instances.ticketServiceCB` | 50% threshold, 10s open | Circuit breaker for ticket-service |
+Key settings: JWT secret (`${JWT_SECRET}`), CORS allowed origins (`${CORS_ALLOWED_ORIGINS}`), route definitions for event-service and ticket-service, Resilience4j circuit breaker instances, retry config.
 
-**Defined routes:**
+### `event-service.yml`
 
-| Route ID | URI | Predicate | Filters |
-|----------|-----|-----------|---------|
-| `event-service` | `lb://event-service` | `Path=/api/v1/events/**` | CircuitBreaker + Retry (3 attempts, GET only) |
-| `ticket-service` | `lb://ticket-service` | `Path=/api/v1/tickets/**` | CircuitBreaker + Retry (3 attempts, GET only) |
+Key settings: server port `8081`, Eureka URL (`${EUREKA_URL}`), internal API key (`${INTERNAL_API_KEY}`), Jackson date format, actuator endpoints via `${MANAGEMENT_ENDPOINTS_INCLUDE}`.
+
+### `ticket-service.yml`
+
+Key settings: server port `8082`, Eureka URL, internal API key, RabbitMQ connection, actuator endpoints.
+
+### `user-service.yml`
+
+Key settings: server port `8084`, Eureka URL, JWT secret and expiration (`${JWT_SECRET}`, `${JWT_EXPIRATION_MS}`), RabbitMQ connection.
+
+### `notification-service.yml`
+
+Key settings: server port `8083`, Eureka URL, RabbitMQ connection, mail settings (`${MAIL_HOST}`, `${MAIL_PORT}`, `${MAIL_USERNAME}`, `${MAIL_PASSWORD}`, `${MAIL_SMTP_AUTH}`, `${MAIL_SMTP_STARTTLS}`, `${MAIL_FROM}`).
 
 ---
 
 ## Configuration API
 
-The Config Server exposes standard Spring Cloud Config endpoints that clients use to fetch their properties:
+The Config Server exposes standard Spring Cloud Config endpoints:
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/{application}/{profile}` | Fetch config for an application and profile |
-| `GET` | `/{application}/{profile}/{label}` | Fetch config for a specific label (branch/tag) |
 | `GET` | `/{application}-{profile}.yml` | Raw YAML for an application+profile |
 
 **Examples:**
 
 ```bash
-# Fetch event-service configuration (default profile)
+# Fetch event-service configuration
 GET http://localhost:8088/event-service/default
 
-# Fetch ticket-service configuration as raw YAML
-GET http://localhost:8088/ticket-service-default.yml
-
-# Fetch api-gateway configuration as raw YAML
-GET http://localhost:8088/api-gateway-default.yml
+# Fetch notification-service configuration as raw YAML
+GET http://localhost:8088/notification-service-default.yml
 ```
 
 ---
@@ -147,12 +132,12 @@ spring:
   application:
     name: config-server
   profiles:
-    active: native              # read config files from classpath, not Git
+    active: native
   cloud:
     config:
       server:
         native:
-          searchLocations: classpath:/config/   # explicit location of config files
+          searchLocations: classpath:/config/
 
 server:
   port: 8088
@@ -160,18 +145,9 @@ server:
 eureka:
   client:
     serviceUrl:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
   instance:
     prefer-ip-address: true
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health, info, metrics
-  endpoint:
-    health:
-      show-details: always
 ```
 
 ---
@@ -180,32 +156,19 @@ management:
 
 ### Prerequisites
 
-- Java 21
-- Maven 3.9+
+- Java 21, Maven 3.9+
 - `discovery-service` running at `localhost:8761`
 
-### Steps
+```bash
+cd config-server
+./mvnw spring-boot:run
+```
 
-1. **Clone the repository** and navigate to the service directory:
+Verify by fetching any service config:
 
-   ```bash
-   git clone <repo-url>
-   cd config-server
-   ```
-
-2. **Start the discovery-service first**, then run the config-server:
-
-   ```bash
-   ./mvnw spring-boot:run
-   ```
-
-3. Verify the server is serving configuration:
-
-   ```bash
-   curl http://localhost:8088/event-service/default
-   ```
-
-> The config-server registers itself with Eureka so that microservices can locate it by name. If Eureka is not available, the server still starts and serves configuration — Eureka registration will be retried in the background.
+```bash
+curl http://localhost:8088/event-service/default
+```
 
 ---
 
@@ -215,16 +178,13 @@ management:
 ./mvnw test
 ```
 
-The test profile uses a dedicated `src/test/resources/application.yml` that keeps the `native` profile active with the classpath search location, and disables the Eureka client so the context loads without requiring external services.
+The test profile keeps the `native` profile active with the classpath search location, and disables the Eureka client so the context loads without external services.
 
 ---
 
 ## Health & Monitoring
 
-Spring Boot Actuator exposes the following endpoints:
-
 | Endpoint | Description |
 |----------|-------------|
-| `GET /actuator/health` | Service health status and details |
+| `GET /actuator/health` | Service health status |
 | `GET /actuator/info` | Application info |
-| `GET /actuator/metrics` | JVM and application metrics |

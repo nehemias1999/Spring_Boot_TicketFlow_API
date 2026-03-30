@@ -20,6 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -34,7 +35,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -51,6 +51,7 @@ class TicketControllerTest {
 
     private static final String USER_ID = "user-001";
     private static final String USER_EMAIL = "user@test.com";
+    private static final String USER_ROLE = "USER";
 
     @Autowired
     private MockMvc mockMvc;
@@ -67,7 +68,7 @@ class TicketControllerTest {
 
     private static TicketResponse buildResponse(String id, TicketStatus status) {
         return new TicketResponse(id, "EVT-001", USER_ID,
-                LocalDateTime.now(), status, LocalDateTime.now(), null);
+                LocalDateTime.now(), status, BigDecimal.valueOf(100.00), LocalDateTime.now(), null);
     }
 
     private static CreateTicketRequest buildCreateRequest() {
@@ -88,12 +89,13 @@ class TicketControllerTest {
             CreateTicketRequest request = buildCreateRequest();
             TicketResponse response = buildResponse("generated-uuid", TicketStatus.CONFIRMED);
 
-            when(ticketService.create(any(), anyString(), anyString())).thenReturn(response);
+            when(ticketService.create(any(), anyString(), anyString(), anyString())).thenReturn(response);
 
             mockMvc.perform(post("/api/v1/tickets")
                             .contentType(MediaType.APPLICATION_JSON)
                             .header("X-User-Id", USER_ID)
                             .header("X-User-Email", USER_EMAIL)
+                            .header("X-User-Role", USER_ROLE)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.id").value("generated-uuid"))
@@ -114,6 +116,7 @@ class TicketControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .header("X-User-Id", USER_ID)
                             .header("X-User-Email", USER_EMAIL)
+                            .header("X-User-Role", USER_ROLE)
                             .content(invalidBody))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.status").value(400));
@@ -132,10 +135,11 @@ class TicketControllerTest {
         @DisplayName("should return 200 OK with TicketResponse when ticket is found and owned by the user")
         void getById_success_returns200() throws Exception {
             TicketResponse response = buildResponse("TKT-001", TicketStatus.CONFIRMED);
-            when(ticketService.getById(eq("TKT-001"), anyString())).thenReturn(response);
+            when(ticketService.getById(eq("TKT-001"), anyString(), anyString())).thenReturn(response);
 
             mockMvc.perform(get("/api/v1/tickets/TKT-001")
-                            .header("X-User-Id", USER_ID))
+                            .header("X-User-Id", USER_ID)
+                            .header("X-User-Role", USER_ROLE))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value("TKT-001"))
                     .andExpect(jsonPath("$.status").value("CONFIRMED"));
@@ -144,11 +148,12 @@ class TicketControllerTest {
         @Test
         @DisplayName("should return 404 Not Found when ticket does not exist")
         void getById_notFound_returns404() throws Exception {
-            when(ticketService.getById(eq("TKT-999"), anyString()))
+            when(ticketService.getById(eq("TKT-999"), anyString(), anyString()))
                     .thenThrow(new TicketNotFoundException("TKT-999"));
 
             mockMvc.perform(get("/api/v1/tickets/TKT-999")
-                            .header("X-User-Id", USER_ID))
+                            .header("X-User-Id", USER_ID)
+                            .header("X-User-Role", USER_ROLE))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.status").value(404))
                     .andExpect(jsonPath("$.message").exists());
@@ -157,11 +162,12 @@ class TicketControllerTest {
         @Test
         @DisplayName("should return 403 Forbidden when ticket belongs to a different user")
         void getById_differentUser_returns403() throws Exception {
-            when(ticketService.getById(eq("TKT-001"), anyString()))
+            when(ticketService.getById(eq("TKT-001"), anyString(), anyString()))
                     .thenThrow(new TicketOwnershipException("TKT-001"));
 
             mockMvc.perform(get("/api/v1/tickets/TKT-001")
-                            .header("X-User-Id", "other-user"))
+                            .header("X-User-Id", "other-user")
+                            .header("X-User-Role", USER_ROLE))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.status").value(403));
         }
@@ -181,10 +187,11 @@ class TicketControllerTest {
             TicketResponse response = buildResponse("TKT-001", TicketStatus.CONFIRMED);
             Page<TicketResponse> page = new PageImpl<>(List.of(response));
 
-            when(ticketService.getAll(any(), any(), any(), anyString())).thenReturn(page);
+            when(ticketService.getAll(any(), any(), any(), anyString(), anyString())).thenReturn(page);
 
             mockMvc.perform(get("/api/v1/tickets")
-                            .header("X-User-Id", USER_ID))
+                            .header("X-User-Id", USER_ID)
+                            .header("X-User-Role", USER_ROLE))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content[0].id").value("TKT-001"))
                     .andExpect(jsonPath("$.totalElements").value(1));
@@ -194,10 +201,11 @@ class TicketControllerTest {
         @DisplayName("should return 200 OK with correct pagination when custom page/size is provided")
         void getAll_customPagination_returns200() throws Exception {
             Page<TicketResponse> emptyPage = new PageImpl<>(List.of());
-            when(ticketService.getAll(any(), any(), any(), anyString())).thenReturn(emptyPage);
+            when(ticketService.getAll(any(), any(), any(), anyString(), anyString())).thenReturn(emptyPage);
 
             mockMvc.perform(get("/api/v1/tickets")
                             .header("X-User-Id", USER_ID)
+                            .header("X-User-Role", USER_ROLE)
                             .param("page", "2")
                             .param("size", "5"))
                     .andExpect(status().isOk())
@@ -205,15 +213,13 @@ class TicketControllerTest {
         }
 
         @Test
-        @DisplayName("should cap page size at 100 when size exceeds the maximum")
-        void getAll_cappedSize_returns200() throws Exception {
-            Page<TicketResponse> emptyPage = new PageImpl<>(List.of());
-            when(ticketService.getAll(any(), any(), any(), anyString())).thenReturn(emptyPage);
-
+        @DisplayName("should return 400 Bad Request when size exceeds maximum of 100")
+        void getAll_oversizedPage_returns400() throws Exception {
             mockMvc.perform(get("/api/v1/tickets")
                             .header("X-User-Id", USER_ID)
+                            .header("X-User-Role", USER_ROLE)
                             .param("size", "999"))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isBadRequest());
         }
 
         @Test
@@ -222,10 +228,11 @@ class TicketControllerTest {
             TicketResponse response = buildResponse("TKT-001", TicketStatus.CONFIRMED);
             Page<TicketResponse> page = new PageImpl<>(List.of(response));
 
-            when(ticketService.getAll(any(), any(), any(), anyString())).thenReturn(page);
+            when(ticketService.getAll(any(), any(), any(), anyString(), anyString())).thenReturn(page);
 
             mockMvc.perform(get("/api/v1/tickets")
                             .header("X-User-Id", USER_ID)
+                            .header("X-User-Role", USER_ROLE)
                             .param("eventId", "EVT-001")
                             .param("status", "CONFIRMED"))
                     .andExpect(status().isOk())
@@ -245,11 +252,12 @@ class TicketControllerTest {
         @DisplayName("should return 200 OK with CANCELLED status on success")
         void cancel_success_returns200() throws Exception {
             TicketResponse response = buildResponse("TKT-001", TicketStatus.CANCELLED);
-            when(ticketService.cancel(eq("TKT-001"), anyString(), anyString())).thenReturn(response);
+            when(ticketService.cancel(eq("TKT-001"), anyString(), anyString(), anyString())).thenReturn(response);
 
             mockMvc.perform(patch("/api/v1/tickets/TKT-001/cancel")
                             .header("X-User-Id", USER_ID)
-                            .header("X-User-Email", USER_EMAIL))
+                            .header("X-User-Email", USER_EMAIL)
+                            .header("X-User-Role", USER_ROLE))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value("TKT-001"))
                     .andExpect(jsonPath("$.status").value("CANCELLED"));
@@ -258,12 +266,13 @@ class TicketControllerTest {
         @Test
         @DisplayName("should return 404 Not Found when ticket to cancel does not exist")
         void cancel_notFound_returns404() throws Exception {
-            when(ticketService.cancel(eq("TKT-999"), anyString(), anyString()))
+            when(ticketService.cancel(eq("TKT-999"), anyString(), anyString(), anyString()))
                     .thenThrow(new TicketNotFoundException("TKT-999"));
 
             mockMvc.perform(patch("/api/v1/tickets/TKT-999/cancel")
                             .header("X-User-Id", USER_ID)
-                            .header("X-User-Email", USER_EMAIL))
+                            .header("X-User-Email", USER_EMAIL)
+                            .header("X-User-Role", USER_ROLE))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.status").value(404));
         }
@@ -271,12 +280,13 @@ class TicketControllerTest {
         @Test
         @DisplayName("should return 409 Conflict when ticket is already cancelled")
         void cancel_alreadyCancelled_returns409() throws Exception {
-            when(ticketService.cancel(eq("TKT-001"), anyString(), anyString()))
+            when(ticketService.cancel(eq("TKT-001"), anyString(), anyString(), anyString()))
                     .thenThrow(new TicketAlreadyCancelledException("TKT-001"));
 
             mockMvc.perform(patch("/api/v1/tickets/TKT-001/cancel")
                             .header("X-User-Id", USER_ID)
-                            .header("X-User-Email", USER_EMAIL))
+                            .header("X-User-Email", USER_EMAIL)
+                            .header("X-User-Role", USER_ROLE))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.status").value(409))
                     .andExpect(jsonPath("$.message").exists());
@@ -294,23 +304,25 @@ class TicketControllerTest {
         @Test
         @DisplayName("should return 204 No Content when ticket is soft-deleted successfully")
         void delete_success_returns204() throws Exception {
-            doNothing().when(ticketService).delete(eq("TKT-001"), anyString());
+            doNothing().when(ticketService).delete(eq("TKT-001"), anyString(), anyString());
 
             mockMvc.perform(delete("/api/v1/tickets/TKT-001")
-                            .header("X-User-Id", USER_ID))
+                            .header("X-User-Id", USER_ID)
+                            .header("X-User-Role", USER_ROLE))
                     .andExpect(status().isNoContent());
 
-            verify(ticketService).delete(eq("TKT-001"), anyString());
+            verify(ticketService).delete(eq("TKT-001"), anyString(), anyString());
         }
 
         @Test
         @DisplayName("should return 404 Not Found when ticket to delete does not exist")
         void delete_notFound_returns404() throws Exception {
             doThrow(new TicketNotFoundException("TKT-999"))
-                    .when(ticketService).delete(eq("TKT-999"), anyString());
+                    .when(ticketService).delete(eq("TKT-999"), anyString(), anyString());
 
             mockMvc.perform(delete("/api/v1/tickets/TKT-999")
-                            .header("X-User-Id", USER_ID))
+                            .header("X-User-Id", USER_ID)
+                            .header("X-User-Role", USER_ROLE))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.status").value(404));
         }

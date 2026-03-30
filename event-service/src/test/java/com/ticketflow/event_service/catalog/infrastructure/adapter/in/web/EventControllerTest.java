@@ -61,18 +61,20 @@ class EventControllerTest {
 
     private static EventResponse buildResponse(String id) {
         return new EventResponse(id, "Test Event", "Test description",
-                "2026-10-15 20:00", "Test Location",
-                BigDecimal.valueOf(100.00), LocalDateTime.now(), null);
+                LocalDateTime.of(2026, 10, 15, 20, 0), "Test Location",
+                BigDecimal.valueOf(100.00), 100, 100, null, LocalDateTime.now(), null);
     }
 
     private static CreateEventRequest buildCreateRequest() {
         return new CreateEventRequest("Test Event", "Test description",
-                "2026-10-15 20:00", "Test Location", BigDecimal.valueOf(100.00));
+                LocalDateTime.of(2027, 1, 1, 12, 0), "Test Location",
+                BigDecimal.valueOf(100.00), 100);
     }
 
     private static UpdateEventRequest buildUpdateRequest() {
         return new UpdateEventRequest("Updated Title", "Updated description",
-                "2026-11-20 18:00", "Updated Location", BigDecimal.valueOf(150.00));
+                LocalDateTime.of(2027, 11, 20, 18, 0), "Updated Location",
+                BigDecimal.valueOf(150.00), 200);
     }
 
     // -------------------------------------------------------------------------
@@ -89,9 +91,11 @@ class EventControllerTest {
             CreateEventRequest request = buildCreateRequest();
             EventResponse response = buildResponse("generated-uuid");
 
-            when(eventService.create(any())).thenReturn(response);
+            when(eventService.create(any(), any(), any())).thenReturn(response);
 
             mockMvc.perform(post("/api/v1/events")
+                            .header("X-User-Id", "user-1")
+                            .header("X-User-Role", "SELLER")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isCreated())
@@ -107,13 +111,16 @@ class EventControllerTest {
                     {
                       "title": "a",
                       "description": "",
-                      "date": "",
+                      "date": null,
                       "location": "",
-                      "basePrice": -1
+                      "basePrice": -1,
+                      "capacity": 0
                     }
                     """;
 
             mockMvc.perform(post("/api/v1/events")
+                            .header("X-User-Id", "user-1")
+                            .header("X-User-Role", "SELLER")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(invalidBody))
                     .andExpect(status().isBadRequest())
@@ -189,13 +196,10 @@ class EventControllerTest {
         }
 
         @Test
-        @DisplayName("should cap page size at 100 when size exceeds the maximum")
-        void getAll_cappedSize_returns200() throws Exception {
-            Page<EventResponse> emptyPage = new PageImpl<>(List.of());
-            when(eventService.getAll(any(), any(), any())).thenReturn(emptyPage);
-
+        @DisplayName("should return 400 Bad Request when size exceeds maximum of 100")
+        void getAll_oversizedPage_returns400() throws Exception {
             mockMvc.perform(get("/api/v1/events").param("size", "999"))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isBadRequest());
         }
 
         @Test
@@ -228,12 +232,14 @@ class EventControllerTest {
             UpdateEventRequest request = buildUpdateRequest();
             EventResponse response = new EventResponse(
                     "EVT-001", "Updated Title", "Updated description",
-                    "2026-11-20 18:00", "Updated Location",
-                    BigDecimal.valueOf(150.00), LocalDateTime.now(), LocalDateTime.now());
+                    LocalDateTime.of(2027, 11, 20, 18, 0), "Updated Location",
+                    BigDecimal.valueOf(150.00), 200, 200, null, LocalDateTime.now(), LocalDateTime.now());
 
-            when(eventService.update(eq("EVT-001"), any())).thenReturn(response);
+            when(eventService.update(eq("EVT-001"), any(), any(), any())).thenReturn(response);
 
             mockMvc.perform(put("/api/v1/events/EVT-001")
+                            .header("X-User-Id", "user-1")
+                            .header("X-User-Role", "SELLER")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isOk())
@@ -246,10 +252,12 @@ class EventControllerTest {
         void update_notFound_returns404() throws Exception {
             UpdateEventRequest request = buildUpdateRequest();
 
-            when(eventService.update(eq("EVT-999"), any()))
+            when(eventService.update(eq("EVT-999"), any(), any(), any()))
                     .thenThrow(new EventNotFoundException("EVT-999"));
 
             mockMvc.perform(put("/api/v1/events/EVT-999")
+                            .header("X-User-Id", "user-1")
+                            .header("X-User-Role", "SELLER")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isNotFound())
@@ -263,13 +271,16 @@ class EventControllerTest {
                     {
                       "title": "",
                       "description": "",
-                      "date": "",
+                      "date": null,
                       "location": "",
-                      "basePrice": -10
+                      "basePrice": -10,
+                      "capacity": 0
                     }
                     """;
 
             mockMvc.perform(put("/api/v1/events/EVT-001")
+                            .header("X-User-Id", "user-1")
+                            .header("X-User-Role", "SELLER")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(invalidBody))
                     .andExpect(status().isBadRequest())
@@ -288,20 +299,25 @@ class EventControllerTest {
         @Test
         @DisplayName("should return 204 No Content when event is soft-deleted successfully")
         void delete_success_returns204() throws Exception {
-            doNothing().when(eventService).delete("EVT-001");
+            doNothing().when(eventService).delete(eq("EVT-001"), any(), any());
 
-            mockMvc.perform(delete("/api/v1/events/EVT-001"))
+            mockMvc.perform(delete("/api/v1/events/EVT-001")
+                            .header("X-User-Id", "user-1")
+                            .header("X-User-Role", "SELLER"))
                     .andExpect(status().isNoContent());
 
-            verify(eventService).delete("EVT-001");
+            verify(eventService).delete(eq("EVT-001"), any(), any());
         }
 
         @Test
         @DisplayName("should return 404 Not Found when event to delete does not exist")
         void delete_notFound_returns404() throws Exception {
-            doThrow(new EventNotFoundException("EVT-999")).when(eventService).delete("EVT-999");
+            doThrow(new EventNotFoundException("EVT-999")).when(eventService)
+                    .delete(eq("EVT-999"), any(), any());
 
-            mockMvc.perform(delete("/api/v1/events/EVT-999"))
+            mockMvc.perform(delete("/api/v1/events/EVT-999")
+                            .header("X-User-Id", "user-1")
+                            .header("X-User-Role", "SELLER"))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.status").value(404));
         }

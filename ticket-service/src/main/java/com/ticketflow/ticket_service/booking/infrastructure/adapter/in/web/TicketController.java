@@ -8,6 +8,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -44,13 +47,12 @@ import org.springframework.web.bind.annotation.RestController;
  * @author TicketFlow Team
  */
 @Slf4j
+@Validated
 @RestController
 @RequestMapping("/api/v1/tickets")
 @RequiredArgsConstructor
 @Tag(name = "Tickets", description = "Ticket booking management endpoints")
 public class TicketController {
-
-    private static final int MAX_PAGE_SIZE = 100;
 
     private final ITicketService ticketServicePort;
 
@@ -93,15 +95,14 @@ public class TicketController {
     @ApiResponse(responseCode = "200", description = "Paginated list of tickets")
     @GetMapping
     public ResponseEntity<Page<TicketResponse>> getAll(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size,
             @RequestParam(required = false) String eventId,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir,
             @RequestHeader("X-User-Id") String userId,
             @RequestHeader("X-User-Role") String userRole) {
-        size = Math.min(size, MAX_PAGE_SIZE);
         Sort sort = "asc".equalsIgnoreCase(sortDir)
                 ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);

@@ -16,16 +16,17 @@ Microservice responsible for managing events in the **TicketFlow** ticket reserv
 4. [API Endpoints](#api-endpoints)
 5. [Request & Response Models](#request--response-models)
 6. [Database Schema](#database-schema)
-7. [Configuration](#configuration)
-8. [Running the Service](#running-the-service)
-9. [Running Tests](#running-tests)
-10. [Health & Monitoring](#health--monitoring)
+7. [Security](#security)
+8. [Configuration](#configuration)
+9. [Running the Service](#running-the-service)
+10. [Running Tests](#running-tests)
+11. [Health & Monitoring](#health--monitoring)
 
 ---
 
 ## Overview
 
-`event-service` manages the event catalog for the TicketFlow platform. It provides full CRUD operations with soft-delete support, paginated and filterable listings, and automatic schema migrations via Flyway. Event IDs are server-generated UUIDs. The service registers itself with Eureka and is accessible through the API Gateway.
+`event-service` manages the event catalog for the TicketFlow platform. It provides full CRUD operations with soft-delete support, paginated and filterable listings, capacity tracking, and automatic schema migrations via Flyway. Event IDs are server-generated UUIDs. The service registers itself with Eureka and is accessible through the API Gateway.
 
 ---
 
@@ -74,7 +75,7 @@ The service follows **Hexagonal Architecture (Ports & Adapters)** combined with 
 | `catalog.domain.exception` | Domain exceptions (`EventNotFoundException`) |
 | `catalog.infrastructure.adapter.out.persistence` | JPA entities, repositories, persistence adapter |
 | `shared.infrastructure.exception` | Global exception handler and `ApiErrorResponse` |
-| `shared.infrastructure.filter` | `CorrelationIdFilter` — MDC and response header |
+| `shared.infrastructure.filter` | `UserAuthHeaderFilter`, `SecurityHeadersFilter` |
 | `shared.infrastructure.config` | JPA auditing configuration |
 
 ---
@@ -86,7 +87,7 @@ The service follows **Hexagonal Architecture (Ports & Adapters)** combined with 
 | Language | Java 21 |
 | Framework | Spring Boot 3.5.4 |
 | Cloud | Spring Cloud 2025.0.0 (Config, Eureka, LoadBalancer) |
-| Persistence | Spring Data JPA, Hibernate, MySQL 8, Flyway |
+| Persistence | Spring Data JPA, Hibernate, MySQL 8, Flyway, HikariCP |
 | Mapping | MapStruct 1.6.3 |
 | Validation | Jakarta Bean Validation |
 | API Docs | springdoc-openapi 2.8.8 (Swagger UI) |
@@ -99,13 +100,21 @@ The service follows **Hexagonal Architecture (Ports & Adapters)** combined with 
 
 ## API Endpoints
 
-| Method | Path | Description | Request Body | Response |
-|--------|------|-------------|-------------|----------|
-| `POST` | `/api/v1/events` | Create a new event | `CreateEventRequest` | `201 EventResponse` |
-| `GET` | `/api/v1/events/{id}` | Get event by ID | — | `200 EventResponse` |
-| `GET` | `/api/v1/events` | List events (paginated + filtered) | — | `200 Page<EventResponse>` |
-| `PUT` | `/api/v1/events/{id}` | Update an existing event | `UpdateEventRequest` | `200 EventResponse` |
-| `DELETE` | `/api/v1/events/{id}` | Soft-delete an event | — | `204 No Content` |
+| Method | Path | Description | Auth | Role required |
+|--------|------|-------------|------|--------------|
+| `POST` | `/api/v1/events` | Create a new event | Yes | `SELLER` or `ADMIN` |
+| `GET` | `/api/v1/events/{id}` | Get event by ID | No | — |
+| `GET` | `/api/v1/events` | List events (paginated + filtered) | No | — |
+| `PUT` | `/api/v1/events/{id}` | Update an existing event | Yes | `SELLER` or `ADMIN` |
+| `DELETE` | `/api/v1/events/{id}` | Soft-delete an event | Yes | `SELLER` or `ADMIN` |
+
+Internal endpoints (called by ticket-service only):
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| `PATCH` | `/api/v1/events/{id}/decrement-tickets` | Decrement available capacity | `X-Internal-Api-Key` |
+| `PATCH` | `/api/v1/events/{id}/increment-tickets` | Increment available capacity (on cancel) | `X-Internal-Api-Key` |
+| `GET` | `/api/v1/events/my-event-ids` | List event IDs created by the caller | `X-Internal-Api-Key` |
 
 Interactive documentation is available via Swagger UI at `http://localhost:8081/swagger-ui.html`.
 
@@ -113,16 +122,18 @@ Interactive documentation is available via Swagger UI at `http://localhost:8081/
 
 ### POST `/api/v1/events`
 
-Creates a new event. The ID is generated server-side as a UUID.
+Creates a new event. The ID is generated server-side as a UUID. Requires `X-User-Id` and `X-User-Role` headers (set by the API Gateway).
 
 - **201 Created** — event created successfully, returns `EventResponse`
 - **400 Bad Request** — validation failure
+- **401 Unauthorized** — missing `X-User-Id` header
+- **403 Forbidden** — role is not `SELLER` or `ADMIN`
 
 ---
 
 ### GET `/api/v1/events/{id}`
 
-Retrieves a single active event by its UUID.
+Retrieves a single active event by its UUID. No authentication required.
 
 - **200 OK** — returns `EventResponse`
 - **404 Not Found** — no active event with that ID
@@ -131,7 +142,7 @@ Retrieves a single active event by its UUID.
 
 ### GET `/api/v1/events`
 
-Returns a paginated list of active events with optional filters. Page size is capped at 100.
+Returns a paginated list of active events with optional filters. Page size is capped at 100. No authentication required.
 
 | Query Parameter | Type | Default | Description |
 |-----------------|------|---------|-------------|
@@ -143,24 +154,26 @@ Returns a paginated list of active events with optional filters. Page size is ca
 | `sortDir` | String | `desc` | Sort direction: `asc` or `desc` |
 
 - **200 OK** — returns `Page<EventResponse>`
+- **400 Bad Request** — `size` exceeds 100
 
 ---
 
 ### PUT `/api/v1/events/{id}`
 
-Replaces all mutable fields of an existing event.
+Replaces all mutable fields of an existing event. Only the creator or an `ADMIN` can update an event.
 
 - **200 OK** — returns updated `EventResponse`
+- **403 Forbidden** — caller is not the event creator and is not `ADMIN`
 - **404 Not Found** — event does not exist
-- **400 Bad Request** — validation failure
 
 ---
 
 ### DELETE `/api/v1/events/{id}`
 
-Soft-deletes an event. The record is marked `deleted = true` and excluded from all active queries. The row is never physically removed.
+Soft-deletes an event. The record is marked `deleted = true` and excluded from all active queries.
 
 - **204 No Content** — deleted successfully
+- **403 Forbidden** — caller is not the event creator and is not `ADMIN`
 - **404 Not Found** — event does not exist
 
 ---
@@ -173,9 +186,10 @@ Soft-deletes an event. The record is marked `deleted = true` and excluded from a
 {
   "title":       "Lollapalooza 2026",
   "description": "Annual music festival in Chicago",
-  "date":        "2026-08-01 16:00",
+  "date":        "2026-08-01T16:00:00",
   "location":    "Grant Park, Chicago, IL",
-  "basePrice":   99.99
+  "basePrice":   99.99,
+  "capacity":    5000
 }
 ```
 
@@ -183,63 +197,34 @@ Soft-deletes an event. The record is marked `deleted = true` and excluded from a
 |-------|------|-------------|
 | `title` | String | Required, 3–150 characters |
 | `description` | String | Required, max 500 characters |
-| `date` | String | Required |
+| `date` | LocalDateTime | Required |
 | `location` | String | Required, max 200 characters |
-| `basePrice` | BigDecimal | Required, ≥ 0, max 10 integer digits and 2 decimal places |
+| `basePrice` | BigDecimal | Required, ≥ 0 |
+| `capacity` | int | Required, ≥ 1 |
 
 ---
 
 ### `UpdateEventRequest`
 
-```json
-{
-  "title":       "Lollapalooza 2026 — Updated",
-  "description": "Updated description",
-  "date":        "2026-08-02 17:00",
-  "location":    "Grant Park, Chicago, IL",
-  "basePrice":   119.99
-}
-```
-
-| Field | Type | Constraints |
-|-------|------|-------------|
-| `title` | String | Required, 3–150 characters |
-| `description` | String | Required, max 500 characters |
-| `date` | String | Required |
-| `location` | String | Required, max 200 characters |
-| `basePrice` | BigDecimal | Required, ≥ 0, max 10 integer digits and 2 decimal places |
+Same fields and constraints as `CreateEventRequest`.
 
 ---
 
 ### `EventResponse`
 
-**After creation (`POST`)** — `updatedAt` is always `null`:
-
 ```json
 {
-  "id":          "550e8400-e29b-41d4-a716-446655440000",
-  "title":       "Lollapalooza 2026",
-  "description": "Annual music festival in Chicago",
-  "date":        "2026-08-01 16:00",
-  "location":    "Grant Park, Chicago, IL",
-  "basePrice":   99.99,
-  "createdAt":   "2026-03-11T10:00:00",
-  "updatedAt":   null
-}
-```
-
-**After update (`PUT`)** — `updatedAt` is populated:
-
-```json
-{
-  "id":          "550e8400-e29b-41d4-a716-446655440000",
-  "title":       "Lollapalooza 2026 — Updated",
-  "description": "Annual music festival in Chicago",
-  "date":        "2026-08-01 16:00",
-  "location":    "Grant Park, Chicago, IL",
-  "basePrice":   119.99,
-  "createdAt":   "2026-03-11T10:00:00",
-  "updatedAt":   "2026-03-11T12:00:00"
+  "id":                "550e8400-e29b-41d4-a716-446655440000",
+  "title":             "Lollapalooza 2026",
+  "description":       "Annual music festival in Chicago",
+  "date":              "2026-08-01T16:00:00",
+  "location":          "Grant Park, Chicago, IL",
+  "basePrice":         99.99,
+  "capacity":          5000,
+  "availableTickets":  4999,
+  "creatorId":         "user-001",
+  "createdAt":         "2026-03-11T10:00:00",
+  "updatedAt":         "2026-03-11T10:00:00"
 }
 ```
 
@@ -248,17 +233,18 @@ Soft-deletes an event. The record is marked `deleted = true` and excluded from a
 | `id` | String | Server-generated UUID |
 | `title` | String | Event name |
 | `description` | String | Short summary |
-| `date` | String | Date and time of the event |
+| `date` | LocalDateTime | Date and time of the event |
 | `location` | String | Venue |
-| `basePrice` | BigDecimal | Base reference price |
-| `createdAt` | LocalDateTime | Creation timestamp — format `yyyy-MM-dd'T'HH:mm:ss` |
-| `updatedAt` | LocalDateTime | Last update timestamp — `null` on creation, populated after first update |
+| `basePrice` | BigDecimal | Base ticket price |
+| `capacity` | int | Total ticket capacity |
+| `availableTickets` | int | Remaining tickets (`capacity` minus sold) |
+| `creatorId` | String | ID of the user who created the event |
+| `createdAt` | LocalDateTime | Creation timestamp |
+| `updatedAt` | LocalDateTime | Last update timestamp |
 
 ---
 
 ### `ApiErrorResponse`
-
-Returned by all endpoints on error conditions.
 
 ```json
 {
@@ -271,123 +257,88 @@ Returned by all endpoints on error conditions.
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `timestamp` | LocalDateTime | When the error occurred |
-| `status` | int | HTTP status code |
-| `error` | String | HTTP status reason phrase |
-| `message` | String | Human-readable error description |
-| `path` | String | Request URI that triggered the error |
-| `correlationId` | String | Value of the `X-Correlation-Id` header on the request |
-
 ---
 
 ## Database Schema
 
 Schema is managed by **Flyway** migrations.
 
-**V1** — creates the `events` table:
+| Migration | Description |
+|-----------|-------------|
+| V1 | Creates the `events` table |
+| V2 | Extends `id` column to `VARCHAR(36)` |
+| V3 | Adds `creator_id VARCHAR(50) NOT NULL` |
+| V4 | Adds `capacity INT NOT NULL DEFAULT 0` |
+| V5 | Adds `available_tickets INT NOT NULL DEFAULT 0` |
+| V6 | Backfills `available_tickets` from `capacity` |
+| V7 | Adds CHECK constraints and performance indexes |
+
+**V7 constraints and indexes:**
 
 ```sql
-CREATE TABLE IF NOT EXISTS events (
-    id          VARCHAR(36)    NOT NULL,
-    title       VARCHAR(150)   NOT NULL,
-    description VARCHAR(500)   NOT NULL,
-    date        VARCHAR(255)   NOT NULL,
-    location    VARCHAR(200)   NOT NULL,
-    base_price  DECIMAL(12, 2) NOT NULL,
-    deleted     BOOLEAN        NOT NULL DEFAULT FALSE,
-    created_at  DATETIME       NOT NULL,
-    updated_at  DATETIME,
-    PRIMARY KEY (id)
-);
+-- Prevent overselling at the database level
+ALTER TABLE events ADD CONSTRAINT chk_available_non_negative
+    CHECK (available_tickets >= 0);
+ALTER TABLE events ADD CONSTRAINT chk_available_lte_capacity
+    CHECK (available_tickets <= capacity);
+ALTER TABLE events ADD CONSTRAINT chk_capacity_positive
+    CHECK (capacity >= 1);
+
+-- Performance indexes
+CREATE INDEX idx_events_creator_id      ON events (creator_id);
+CREATE INDEX idx_events_creator_deleted ON events (creator_id, deleted);
+CREATE INDEX idx_events_available       ON events (available_tickets);
 ```
-
-**V2** — extends the `id` column to accommodate UUIDs:
-
-```sql
-ALTER TABLE events MODIFY COLUMN id VARCHAR(36) NOT NULL;
-```
-
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | VARCHAR(36) | Server-generated UUID primary key |
-| `title` | VARCHAR(150) | Event name |
-| `description` | VARCHAR(500) | Short summary |
-| `date` | VARCHAR(255) | Date/time as a string |
-| `location` | VARCHAR(200) | Venue |
-| `base_price` | DECIMAL(12,2) | Reference price |
-| `deleted` | BOOLEAN | Soft-delete flag (default `false`) |
-| `created_at` | DATETIME | Set by JPA auditing on insert |
-| `updated_at` | DATETIME | `NULL` on insert; set by JPA auditing on first update |
 
 ---
 
-## API Conventions
+## Security
 
-### Datetime format
+### Role-based access control
 
-All `LocalDateTime` fields in responses use the format `yyyy-MM-dd'T'HH:mm:ss` (no nanoseconds):
+Write operations (create, update, delete) require the `X-User-Role` header to contain `SELLER` or `ADMIN`. The `UserAuthHeaderFilter` enforces this before the request reaches the controller.
 
-```
-2026-03-11T10:00:00
-```
+### Internal API key
 
-This is configured centrally in the config-server (`event-service.yml`):
+The capacity endpoints (`/decrement-tickets`, `/increment-tickets`, `/my-event-ids`) are reserved for service-to-service calls from ticket-service. They require an `X-Internal-Api-Key` header matching the `INTERNAL_API_KEY` environment variable. Requests with a missing or incorrect key receive `401 Unauthorized`.
 
-```yaml
-spring:
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
-      write-date-timestamps-as-nanoseconds: false
-    date-format: yyyy-MM-dd'T'HH:mm:ss
-```
+### Security response headers
 
-### `updatedAt` field
+Every response includes:
 
-- **On `POST` (creation):** `updatedAt` is always returned as `null`. The persistence adapter explicitly clears the in-memory value that Spring Auditing sets during the INSERT, so the response accurately reflects that no update has occurred yet.
-- **On `PUT` / `PATCH` (modification):** `updatedAt` is populated by `@LastModifiedDate` (Spring Data JPA Auditing) with the timestamp of the update.
+| Header | Value |
+|--------|-------|
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Cache-Control` | `no-store` |
+| `Pragma` | `no-cache` |
 
 ---
 
 ## Configuration
 
-Key properties from `src/main/resources/application.yml`:
+All sensitive values are injected via environment variables. Key variables:
 
-```yaml
-spring:
-  application:
-    name: event-service
+| Variable | Description |
+|----------|-------------|
+| `DB_URL` | JDBC URL for `ticketflow_events` database |
+| `DB_USERNAME` | Database username |
+| `DB_PASSWORD` | Database password |
+| `INTERNAL_API_KEY` | Secret for service-to-service calls |
+| `EUREKA_URL` | Eureka server URL |
+| `SHOW_SQL` | Set to `true` to log SQL queries (default `false`) |
+| `MANAGEMENT_ENDPOINTS_INCLUDE` | Actuator endpoints to expose |
 
-  # Config Server (optional — service starts without it)
-  config:
-    import: "optional:configserver:http://localhost:8088"
+HikariCP connection pool defaults (configurable via config-server):
 
-  datasource:
-    url: jdbc:mysql://localhost:3306/ticketflow_events
-          ?createDatabaseIfNotExist=true&useSSL=false
-          &serverTimezone=UTC&allowPublicKeyRetrieval=true
-    username: root
-    password: root
-    driver-class-name: com.mysql.cj.jdbc.Driver
-
-  jpa:
-    hibernate:
-      ddl-auto: validate      # Flyway owns the schema — Hibernate only validates
-    show-sql: true
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health, info, metrics
-  endpoint:
-    health:
-      show-details: always
-```
-
-> The datasource URL includes `createDatabaseIfNotExist=true`, so MySQL will automatically create the `ticketflow_events` database if it does not exist.
+| Setting | Default |
+|---------|---------|
+| `minimum-idle` | `5` |
+| `maximum-pool-size` | `20` |
+| `connection-timeout` | `30s` |
+| `idle-timeout` | `10min` |
+| `max-lifetime` | `30min` |
 
 ---
 
@@ -397,28 +348,13 @@ management:
 
 - Java 21
 - Maven 3.9+
-- MySQL 8 running locally (default: `localhost:3306`)
+- MySQL 8 on port `3306`
+- `discovery-service` and `config-server` running (optional — import is `optional:`)
 
-### Steps
-
-1. **Clone the repository** and navigate to the service directory:
-
-   ```bash
-   git clone <repo-url>
-   cd event-service
-   ```
-
-2. **Configure the database** — update credentials in `application.yml` if your MySQL user/password differs from the defaults (`root`/`root`). The database `ticketflow_events` is created automatically on first run.
-
-3. **Run the service**:
-
-   ```bash
-   ./mvnw spring-boot:run
-   ```
-
-   The service starts on the port configured in the Config Server (or the default port if the Config Server is not available — the import is `optional:`).
-
-4. *(Optional)* Start the **Config Server** and **Eureka Server** first for full service-discovery functionality.
+```bash
+cd event-service
+./mvnw spring-boot:run
+```
 
 ---
 
@@ -428,20 +364,22 @@ management:
 ./mvnw test
 ```
 
-Tests use an **H2 in-memory database** — no external MySQL instance is required. Flyway is disabled in the test profile to allow Hibernate to manage the schema against H2.
+Tests use an **H2 in-memory database** — no external MySQL instance required. The test suite includes:
 
-The test suite includes:
-- **Unit tests** — `EventServiceTest`, `EventControllerTest`, `EventPersistenceAdapterTest`, `GlobalExceptionHandlerTest` (JUnit 5 + Mockito)
-- **Integration tests** — `EventIntegrationTest` (`@SpringBootTest` + `@AutoConfigureMockMvc` + H2, full CRUD lifecycle)
+| Test class | Type | Description |
+|------------|------|-------------|
+| `EventServiceTest` | Unit | Service layer business logic with Mockito |
+| `EventControllerTest` | Unit | Controller layer with MockMvc |
+| `EventPersistenceAdapterTest` | Unit | Persistence adapter with H2 |
+| `GlobalExceptionHandlerTest` | Unit | Error response mapping |
+| `UserAuthHeaderFilterTest` | Unit | Filter: auth rules for all endpoint types |
+| `EventIntegrationTest` | Integration | Full CRUD lifecycle with `@SpringBootTest` + H2 |
 
 ---
 
 ## Health & Monitoring
 
-Spring Boot Actuator exposes the following endpoints:
-
 | Endpoint | Description |
 |----------|-------------|
-| `GET /actuator/health` | Service health status and details |
+| `GET /actuator/health` | Service health status |
 | `GET /actuator/info` | Application info |
-| `GET /actuator/metrics` | JVM and application metrics |

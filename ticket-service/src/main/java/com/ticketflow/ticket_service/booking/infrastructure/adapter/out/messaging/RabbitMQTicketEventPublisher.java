@@ -8,11 +8,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.UUID;
+
 /**
  * AMQP adapter implementing {@link ITicketEventPublisher}.
  * <p>
- * Publishes {@link TicketPurchasedEvent} to the {@code ticketflow.events} topic exchange
- * with routing key {@code ticket.purchased}.
+ * Sets a unique {@code messageId} on every message to enable idempotent
+ * processing in notification-service.
  * </p>
  */
 @Slf4j
@@ -29,14 +31,22 @@ public class RabbitMQTicketEventPublisher implements ITicketEventPublisher {
     @Override
     public void publishTicketPurchased(String ticketId, String userId, String userEmail) {
         TicketPurchasedEvent event = new TicketPurchasedEvent(ticketId, userId, userEmail);
-        log.info("Publishing TicketPurchasedEvent — ticketId: {}, userId: {}", ticketId, userId);
-        rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY, event);
+        String messageId = UUID.randomUUID().toString();
+        log.info("Publishing TicketPurchasedEvent — ticketId: {}, messageId: {}", ticketId, messageId);
+        rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY, event, msg -> {
+            msg.getMessageProperties().setMessageId(messageId);
+            return msg;
+        });
     }
 
     @Override
     public void publishTicketCancelled(String ticketId, String userId, String userEmail) {
         TicketCancelledEvent event = new TicketCancelledEvent(ticketId, userId, userEmail);
-        log.info("Publishing TicketCancelledEvent — ticketId: {}, userId: {}", ticketId, userId);
-        rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY_CANCELLED, event);
+        String messageId = UUID.randomUUID().toString();
+        log.info("Publishing TicketCancelledEvent — ticketId: {}, messageId: {}", ticketId, messageId);
+        rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY_CANCELLED, event, msg -> {
+            msg.getMessageProperties().setMessageId(messageId);
+            return msg;
+        });
     }
 }

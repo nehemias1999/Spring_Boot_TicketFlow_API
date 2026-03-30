@@ -43,9 +43,19 @@ public class Event {
     private String description;
 
     /**
-     * Date and time of the event as a human-readable string (e.g., "2026-10-15 20:00").
+     * Date and time of the event.
      */
-    private String date;
+    private LocalDateTime date;
+
+    /**
+     * Maximum number of tickets available for this event.
+     */
+    private int capacity;
+
+    /**
+     * Current number of tickets still available for purchase.
+     */
+    private int availableTickets;
 
     /**
      * Venue or location where the event takes place (e.g., "Estadio River Plate").

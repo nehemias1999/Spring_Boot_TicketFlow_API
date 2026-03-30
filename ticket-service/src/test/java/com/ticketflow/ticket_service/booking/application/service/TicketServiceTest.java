@@ -1,5 +1,6 @@
 package com.ticketflow.ticket_service.booking.application.service;
 
+import com.ticketflow.ticket_service.booking.application.dto.external.EventDto;
 import com.ticketflow.ticket_service.booking.application.dto.request.CreateTicketRequest;
 import com.ticketflow.ticket_service.booking.application.dto.response.TicketResponse;
 import com.ticketflow.ticket_service.booking.application.mapper.ITicketApplicationMapper;
@@ -8,19 +9,22 @@ import com.ticketflow.ticket_service.booking.domain.exception.TicketNotFoundExce
 import com.ticketflow.ticket_service.booking.domain.exception.TicketOwnershipException;
 import com.ticketflow.ticket_service.booking.domain.model.Ticket;
 import com.ticketflow.ticket_service.booking.domain.model.TicketStatus;
+import com.ticketflow.ticket_service.booking.domain.port.out.IEventServicePort;
 import com.ticketflow.ticket_service.booking.domain.port.out.ITicketEventPublisher;
 import com.ticketflow.ticket_service.booking.domain.port.out.ITicketPersistencePort;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -38,8 +42,8 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for {@link TicketService}.
  * <p>
- * All dependencies ({@link ITicketPersistencePort} and {@link ITicketApplicationMapper})
- * are mocked with Mockito so that only the service business logic is tested in isolation.
+ * All dependencies are mocked with Mockito so that only the service business logic is tested
+ * in isolation.
  * </p>
  */
 @ExtendWith(MockitoExtension.class)
@@ -48,6 +52,7 @@ class TicketServiceTest {
 
     private static final String USER_ID = "user-001";
     private static final String USER_EMAIL = "user@test.com";
+    private static final String USER_ROLE = "USER";
 
     @Mock
     private ITicketPersistencePort ticketPersistencePort;
@@ -58,8 +63,21 @@ class TicketServiceTest {
     @Mock
     private ITicketEventPublisher ticketEventPublisher;
 
-    @InjectMocks
+    @Mock
+    private IEventServicePort eventServicePort;
+
     private TicketService ticketService;
+
+    @BeforeEach
+    void setUp() {
+        ticketService = new TicketService(
+                ticketPersistencePort,
+                ticketApplicationMapper,
+                ticketEventPublisher,
+                eventServicePort,
+                new SimpleMeterRegistry()
+        );
+    }
 
     // -------------------------------------------------------------------------
     // Helpers
@@ -72,6 +90,7 @@ class TicketServiceTest {
                 .userId(USER_ID)
                 .purchaseDate(LocalDateTime.now())
                 .status(status)
+                .price(BigDecimal.valueOf(100.00))
                 .deleted(false)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -79,7 +98,14 @@ class TicketServiceTest {
 
     private static TicketResponse buildResponse(String id, TicketStatus status) {
         return new TicketResponse(id, "EVT-001", USER_ID,
-                LocalDateTime.now(), status, LocalDateTime.now(), null);
+                LocalDateTime.now(), status, BigDecimal.valueOf(100.00), LocalDateTime.now(), null);
+    }
+
+    private static EventDto buildEventDto() {
+        return new EventDto("EVT-001", "Test Event", "Description",
+                LocalDateTime.of(2027, 1, 1, 12, 0), "Test Location",
+                BigDecimal.valueOf(100.00), 500, 100, null,
+                LocalDateTime.now(), null);
     }
 
     private static CreateTicketRequest buildCreateRequest() {
@@ -95,23 +121,27 @@ class TicketServiceTest {
     class Create {
 
         @Test
-        @DisplayName("should generate a UUID id, persist, publish event, and return TicketResponse")
+        @DisplayName("should verify event, generate UUID, persist, publish event, and return TicketResponse")
         void create_success() {
             // given
             CreateTicketRequest request = buildCreateRequest();
             Ticket domain = buildTicket("some-uuid", TicketStatus.CONFIRMED);
             TicketResponse response = buildResponse("some-uuid", TicketStatus.CONFIRMED);
 
+            when(eventServicePort.getEventById("EVT-001")).thenReturn(buildEventDto());
+            doNothing().when(eventServicePort).decrementAvailableTickets("EVT-001");
             when(ticketApplicationMapper.toDomain(request)).thenReturn(domain);
             when(ticketPersistencePort.save(any(Ticket.class))).thenReturn(domain);
             when(ticketApplicationMapper.toResponse(domain)).thenReturn(response);
             doNothing().when(ticketEventPublisher).publishTicketPurchased(any(), any(), any());
 
             // when
-            TicketResponse result = ticketService.create(request, USER_ID, USER_EMAIL);
+            TicketResponse result = ticketService.create(request, USER_ID, USER_EMAIL, USER_ROLE);
 
             // then
             assertThat(result).isEqualTo(response);
+            verify(eventServicePort).getEventById("EVT-001");
+            verify(eventServicePort).decrementAvailableTickets("EVT-001");
             verify(ticketPersistencePort).save(any(Ticket.class));
             verify(ticketEventPublisher).publishTicketPurchased(anyString(), eq(USER_ID), eq(USER_EMAIL));
         }
@@ -137,7 +167,7 @@ class TicketServiceTest {
             when(ticketApplicationMapper.toResponse(domain)).thenReturn(response);
 
             // when
-            TicketResponse result = ticketService.getById("TKT-001", USER_ID);
+            TicketResponse result = ticketService.getById("TKT-001", USER_ID, USER_ROLE);
 
             // then
             assertThat(result).isEqualTo(response);
@@ -151,7 +181,7 @@ class TicketServiceTest {
                     .thenReturn(Optional.empty());
 
             // when / then
-            assertThatThrownBy(() -> ticketService.getById("TKT-999", USER_ID))
+            assertThatThrownBy(() -> ticketService.getById("TKT-999", USER_ID, USER_ROLE))
                     .isInstanceOf(TicketNotFoundException.class)
                     .hasMessageContaining("TKT-999");
         }
@@ -165,7 +195,7 @@ class TicketServiceTest {
                     .thenReturn(Optional.of(domain));
 
             // when / then
-            assertThatThrownBy(() -> ticketService.getById("TKT-001", "other-user"))
+            assertThatThrownBy(() -> ticketService.getById("TKT-001", "other-user", USER_ROLE))
                     .isInstanceOf(TicketOwnershipException.class)
                     .hasMessageContaining("TKT-001");
         }
@@ -192,7 +222,7 @@ class TicketServiceTest {
             when(ticketApplicationMapper.toResponse(domain)).thenReturn(response);
 
             // when
-            Page<TicketResponse> result = ticketService.getAll(null, null, pageable, USER_ID);
+            Page<TicketResponse> result = ticketService.getAll(null, null, pageable, USER_ID, USER_ROLE);
 
             // then
             assertThat(result.getContent()).containsExactly(response);
@@ -207,7 +237,7 @@ class TicketServiceTest {
             when(ticketPersistencePort.findAllByFilters(null, USER_ID, null, pageable)).thenReturn(Page.empty());
 
             // when
-            Page<TicketResponse> result = ticketService.getAll(null, null, pageable, USER_ID);
+            Page<TicketResponse> result = ticketService.getAll(null, null, pageable, USER_ID, USER_ROLE);
 
             // then
             assertThat(result.getContent()).isEmpty();
@@ -227,7 +257,7 @@ class TicketServiceTest {
             when(ticketApplicationMapper.toResponse(domain)).thenReturn(response);
 
             // when
-            Page<TicketResponse> result = ticketService.getAll("EVT-001", "CONFIRMED", pageable, USER_ID);
+            Page<TicketResponse> result = ticketService.getAll("EVT-001", "CONFIRMED", pageable, USER_ID, USER_ROLE);
 
             // then
             assertThat(result.getContent()).containsExactly(response);
@@ -244,7 +274,7 @@ class TicketServiceTest {
     class Cancel {
 
         @Test
-        @DisplayName("should cancel ticket, publish event and return TicketResponse with CANCELLED status")
+        @DisplayName("should cancel ticket, restore capacity, publish event and return TicketResponse with CANCELLED status")
         void cancel_success() {
             // given
             Ticket existing = buildTicket("TKT-001", TicketStatus.CONFIRMED);
@@ -255,9 +285,10 @@ class TicketServiceTest {
                     .thenReturn(Optional.of(existing));
             when(ticketPersistencePort.update(existing)).thenReturn(cancelled);
             when(ticketApplicationMapper.toResponse(cancelled)).thenReturn(response);
+            doNothing().when(eventServicePort).incrementAvailableTickets(anyString());
 
             // when
-            TicketResponse result = ticketService.cancel("TKT-001", USER_ID, USER_EMAIL);
+            TicketResponse result = ticketService.cancel("TKT-001", USER_ID, USER_EMAIL, USER_ROLE);
 
             // then
             assertThat(result.status()).isEqualTo(TicketStatus.CANCELLED);
@@ -274,7 +305,7 @@ class TicketServiceTest {
                     .thenReturn(Optional.empty());
 
             // when / then
-            assertThatThrownBy(() -> ticketService.cancel("TKT-999", USER_ID, USER_EMAIL))
+            assertThatThrownBy(() -> ticketService.cancel("TKT-999", USER_ID, USER_EMAIL, USER_ROLE))
                     .isInstanceOf(TicketNotFoundException.class)
                     .hasMessageContaining("TKT-999");
 
@@ -290,7 +321,7 @@ class TicketServiceTest {
                     .thenReturn(Optional.of(alreadyCancelled));
 
             // when / then
-            assertThatThrownBy(() -> ticketService.cancel("TKT-001", USER_ID, USER_EMAIL))
+            assertThatThrownBy(() -> ticketService.cancel("TKT-001", USER_ID, USER_EMAIL, USER_ROLE))
                     .isInstanceOf(TicketAlreadyCancelledException.class)
                     .hasMessageContaining("TKT-001");
 
@@ -315,7 +346,7 @@ class TicketServiceTest {
                     .thenReturn(Optional.of(existing));
 
             // when
-            ticketService.delete("TKT-001", USER_ID);
+            ticketService.delete("TKT-001", USER_ID, USER_ROLE);
 
             // then
             assertThat(existing.isDeleted()).isTrue();
@@ -330,7 +361,7 @@ class TicketServiceTest {
                     .thenReturn(Optional.empty());
 
             // when / then
-            assertThatThrownBy(() -> ticketService.delete("TKT-999", USER_ID))
+            assertThatThrownBy(() -> ticketService.delete("TKT-999", USER_ID, USER_ROLE))
                     .isInstanceOf(TicketNotFoundException.class)
                     .hasMessageContaining("TKT-999");
 

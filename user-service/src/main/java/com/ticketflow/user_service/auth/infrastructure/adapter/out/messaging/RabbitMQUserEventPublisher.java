@@ -7,11 +7,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.UUID;
+
 /**
  * AMQP adapter implementing {@link IUserEventPublisher}.
  * <p>
- * Publishes {@link UserRegisteredEvent} to the {@code ticketflow.events} topic exchange
- * with routing key {@code user.registered}.
+ * Sets a unique {@code messageId} on every message to enable idempotent
+ * processing in notification-service.
  * </p>
  */
 @Slf4j
@@ -27,7 +29,11 @@ public class RabbitMQUserEventPublisher implements IUserEventPublisher {
     @Override
     public void publishUserRegistered(String userId, String email) {
         UserRegisteredEvent event = new UserRegisteredEvent(userId, email);
-        log.info("Publishing UserRegisteredEvent — userId: {}", userId);
-        rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY, event);
+        String messageId = UUID.randomUUID().toString();
+        log.info("Publishing UserRegisteredEvent — userId: {}, messageId: {}", userId, messageId);
+        rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY, event, msg -> {
+            msg.getMessageProperties().setMessageId(messageId);
+            return msg;
+        });
     }
 }

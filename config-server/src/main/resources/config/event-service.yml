@@ -1,6 +1,9 @@
 server:
   port: 8081
 
+services:
+  internal-api-key: ${INTERNAL_API_KEY:ticketflow-internal-secret-change-in-prod}
+
 spring:
   cloud:
     discovery:
@@ -14,7 +17,7 @@ spring:
 eureka:
   client:
     serviceUrl:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
   instance:
     prefer-ip-address: true
 
@@ -25,7 +28,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, metrics, refresh
+        include: ${MANAGEMENT_ENDPOINTS_INCLUDE:health,info}
   endpoint:
     health:
-      show-details: always
+      show-details: ${MANAGEMENT_HEALTH_SHOW_DETAILS:when-authorized}

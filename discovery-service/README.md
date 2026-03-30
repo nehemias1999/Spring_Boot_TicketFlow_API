@@ -23,22 +23,24 @@ Service registry for the **TicketFlow** ticket reservation system. Acts as the c
 
 ## Overview
 
-`discovery-service` is a standalone **Netflix Eureka Server**. It does not register itself in the registry and does not fetch the registry from any peer — it is the source of truth for service locations. Every other microservice in TicketFlow (config-server, api-gateway, event-service, ticket-service) registers with this server on startup and uses it to resolve the addresses of other services at runtime.
+`discovery-service` is a standalone **Netflix Eureka Server**. It does not register itself in the registry and does not fetch the registry from any peer — it is the source of truth for service locations. Every other microservice in TicketFlow registers with this server on startup and uses it to resolve the addresses of other services at runtime.
 
 ---
 
 ## Role in the Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     discovery-service                         │
-│                   (Netflix Eureka Server)                     │
-│                    localhost:8761                             │
-└───┬──────────────┬──────────────┬──────────────┬─────────────┘
-    │ registers    │ registers    │ registers    │ registers
-    ▼              ▼              ▼              ▼
-config-server  api-gateway  event-service  ticket-service
-(port 8088)    (port 8080)  (port 8081)    (port 8082)
+┌──────────────────────────────────────────────────────────────────┐
+│                       discovery-service                           │
+│                   (Netflix Eureka Server)                         │
+│                        localhost:8761                             │
+└───┬──────────┬──────────┬──────────┬──────────┬──────────────────┘
+    │          │          │          │          │
+    ▼          ▼          ▼          ▼          ▼
+config-server api-gateway event-service ticket-service user-service
+(port 8088)  (port 8080) (port 8081)  (port 8082)  (port 8084)
+                                                 + notification-service
+                                                   (port 8083)
 ```
 
 **Startup order** — the discovery-service must be the first service started, as all other services attempt to register with Eureka on boot.
@@ -46,7 +48,7 @@ config-server  api-gateway  event-service  ticket-service
 | Property | Value |
 |----------|-------|
 | `register-with-eureka` | `false` — the server does not register itself |
-| `fetch-registry` | `false` — the server does not replicate from peers |
+| `fetch-registry` | `false` — no peer replication in single-node setup |
 
 ---
 
@@ -76,6 +78,15 @@ The dashboard shows:
 - Instance metadata (IP, port, health-check URL)
 - General server information (environment, uptime, renewal threshold)
 
+When all TicketFlow services are running you should see these instances registered:
+
+- `API-GATEWAY`
+- `CONFIG-SERVER`
+- `EVENT-SERVICE`
+- `TICKET-SERVICE`
+- `USER-SERVICE`
+- `NOTIFICATION-SERVICE`
+
 ---
 
 ## Configuration
@@ -103,10 +114,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, metrics
+        include: health, info
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
 ```
 
 ---
@@ -118,22 +129,12 @@ management:
 - Java 21
 - Maven 3.9+
 
-### Steps
+```bash
+cd discovery-service
+./mvnw spring-boot:run
+```
 
-1. **Clone the repository** and navigate to the service directory:
-
-   ```bash
-   git clone <repo-url>
-   cd discovery-service
-   ```
-
-2. **Run the service**:
-
-   ```bash
-   ./mvnw spring-boot:run
-   ```
-
-3. Verify the dashboard is available at `http://localhost:8761`.
+Verify the dashboard is available at `http://localhost:8761`.
 
 > **Start this service first.** All other TicketFlow microservices register with Eureka on startup. Starting them before the discovery-service will cause registration errors (they will retry, but it is cleaner to start in order).
 
@@ -145,16 +146,13 @@ management:
 ./mvnw test
 ```
 
-The test profile uses a dedicated `src/test/resources/application.yml` that assigns a random port (`0`) and disables peer replication, so the context loads without requiring a real Eureka instance to be running.
+The test profile uses a dedicated `src/test/resources/application.yml` that assigns a random port (`0`) and disables peer replication, so the context loads without requiring a real Eureka instance.
 
 ---
 
 ## Health & Monitoring
 
-Spring Boot Actuator exposes the following endpoints:
-
 | Endpoint | Description |
 |----------|-------------|
-| `GET /actuator/health` | Service health status and details |
+| `GET /actuator/health` | Service health status |
 | `GET /actuator/info` | Application info |
-| `GET /actuator/metrics` | JVM and application metrics |

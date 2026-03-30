@@ -1,7 +1,9 @@
 package com.ticketflow.user_service.auth.domain.port.in;
 
+import com.ticketflow.user_service.auth.application.dto.request.ChangePasswordRequest;
 import com.ticketflow.user_service.auth.application.dto.request.LoginRequest;
 import com.ticketflow.user_service.auth.application.dto.request.RegisterRequest;
+import com.ticketflow.user_service.auth.application.dto.request.UpdateProfileRequest;
 import com.ticketflow.user_service.auth.application.dto.response.AuthResponse;
 import com.ticketflow.user_service.auth.application.dto.response.UserResponse;
 import org.springframework.data.domain.Page;
@@ -23,4 +25,8 @@ public interface IUserService {
     UserResponse getUserById(String id, String requestingUserId, String requestingUserRole);
 
     UserResponse updateUserRole(String id, String newRole, String requestingUserRole);
+
+    UserResponse updateProfile(String id, UpdateProfileRequest request, String requestingUserId, String requestingUserRole);
+
+    void changePassword(String id, ChangePasswordRequest request, String requestingUserId);
 }

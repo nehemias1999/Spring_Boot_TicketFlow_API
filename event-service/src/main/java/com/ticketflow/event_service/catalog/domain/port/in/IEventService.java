@@ -28,4 +28,10 @@ public interface IEventService {
     Page<EventResponse> getMyEvents(String creatorId, Pageable pageable);
 
     List<String> getMyEventIds(String creatorId);
+
+    /** Decrements availableTickets by 1. Throws EventFullException if already 0. */
+    EventResponse decrementAvailableTickets(String eventId);
+
+    /** Increments availableTickets by 1 (called on ticket cancellation). */
+    EventResponse incrementAvailableTickets(String eventId);
 }

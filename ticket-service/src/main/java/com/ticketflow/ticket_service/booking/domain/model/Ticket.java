@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -52,6 +53,11 @@ public class Ticket {
      * Defaults to {@link TicketStatus#CONFIRMED} on creation.
      */
     private TicketStatus status;
+
+    /**
+     * Price paid at the time of purchase (copied from event's basePrice).
+     */
+    private BigDecimal price;
 
     /**
      * Soft-delete flag. When {@code true}, the ticket is considered deleted.

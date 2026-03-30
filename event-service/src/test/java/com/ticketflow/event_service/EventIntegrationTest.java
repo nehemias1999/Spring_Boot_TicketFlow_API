@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -48,9 +49,10 @@ class EventIntegrationTest {
         return new CreateEventRequest(
                 "Lollapalooza 2026",
                 "Annual music festival",
-                "2026-10-15 20:00",
+                LocalDateTime.of(2027, 10, 15, 20, 0),
                 "Estadio River Plate",
-                BigDecimal.valueOf(150.00)
+                BigDecimal.valueOf(150.00),
+                500
         );
     }
 
@@ -60,6 +62,8 @@ class EventIntegrationTest {
         CreateEventRequest request = buildCreateRequest();
 
         mockMvc.perform(post("/api/v1/events")
+                        .header("X-User-Id", "user-1")
+                        .header("X-User-Role", "SELLER")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -74,6 +78,8 @@ class EventIntegrationTest {
     void createAndGetById_success() throws Exception {
         // Create
         MvcResult createResult = mockMvc.perform(post("/api/v1/events")
+                        .header("X-User-Id", "user-1")
+                        .header("X-User-Role", "SELLER")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated())
@@ -94,6 +100,8 @@ class EventIntegrationTest {
     void createAndUpdate_success() throws Exception {
         // Create
         MvcResult createResult = mockMvc.perform(post("/api/v1/events")
+                        .header("X-User-Id", "user-1")
+                        .header("X-User-Role", "SELLER")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated())
@@ -105,12 +113,15 @@ class EventIntegrationTest {
         UpdateEventRequest updateRequest = new UpdateEventRequest(
                 "Lollapalooza 2026 Updated",
                 "Updated description",
-                "2026-10-20 20:00",
+                LocalDateTime.of(2027, 10, 20, 20, 0),
                 "Estadio Monumental",
-                BigDecimal.valueOf(200.00)
+                BigDecimal.valueOf(200.00),
+                600
         );
 
         mockMvc.perform(put("/api/v1/events/{id}", id)
+                        .header("X-User-Id", "user-1")
+                        .header("X-User-Role", "SELLER")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isOk())
@@ -123,6 +134,8 @@ class EventIntegrationTest {
     @DisplayName("should create an event and list it in the paginated response")
     void createAndGetAll_returnsInPage() throws Exception {
         mockMvc.perform(post("/api/v1/events")
+                        .header("X-User-Id", "user-1")
+                        .header("X-User-Role", "SELLER")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated());
@@ -138,6 +151,8 @@ class EventIntegrationTest {
     void createAndDelete_notFoundAfterDeletion() throws Exception {
         // Create
         MvcResult createResult = mockMvc.perform(post("/api/v1/events")
+                        .header("X-User-Id", "user-1")
+                        .header("X-User-Role", "SELLER")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(buildCreateRequest())))
                 .andExpect(status().isCreated())
@@ -146,7 +161,9 @@ class EventIntegrationTest {
         String id = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText();
 
         // Delete
-        mockMvc.perform(delete("/api/v1/events/{id}", id))
+        mockMvc.perform(delete("/api/v1/events/{id}", id)
+                        .header("X-User-Id", "user-1")
+                        .header("X-User-Role", "SELLER"))
                 .andExpect(status().isNoContent());
 
         // Get by ID — should be 404 now
@@ -170,13 +187,16 @@ class EventIntegrationTest {
                 {
                   "title": "a",
                   "description": "",
-                  "date": "",
+                  "date": null,
                   "location": "",
-                  "basePrice": -1
+                  "basePrice": -1,
+                  "capacity": 0
                 }
                 """;
 
         mockMvc.perform(post("/api/v1/events")
+                        .header("X-User-Id", "user-1")
+                        .header("X-User-Role", "SELLER")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalidBody))
                 .andExpect(status().isBadRequest())
